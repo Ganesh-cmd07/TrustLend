@@ -1,0 +1,45 @@
+{
+  "properties": [
+    {
+      "name": "app.jwt.secret",
+      "type": "java.lang.String",
+      "description": "Secret used to sign and verify JWTs."
+    },
+    {
+      "name": "app.cors.allowed-origins",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Comma-separated allowed browser origins. Defaults to the local Vite development server.",
+      "defaultValue": ["http://localhost:5173"]
+    },
+    {
+      "name": "app.admin.bootstrap.email",
+      "type": "java.lang.String",
+      "description": "Optional email for one-time administrator bootstrap from environment configuration."
+    },
+    {
+      "name": "app.admin.bootstrap.name",
+      "type": "java.lang.String",
+      "description": "Display name for the initial administrator."
+    },
+    {
+      "name": "app.admin.bootstrap.password",
+      "type": "java.lang.String",
+      "description": "Optional initial administrator password; existing admin passwords are never replaced."
+    },
+    {
+      "name": "app.ai.api-key",
+      "type": "java.lang.String",
+      "description": "Optional OpenAI API key used for embedding and grounded answer generation."
+    },
+    {
+      "name": "app.ai.chat-model",
+      "type": "java.lang.String",
+      "description": "OpenAI chat completion model for RAG answers."
+    },
+    {
+      "name": "app.ai.embedding-model",
+      "type": "java.lang.String",
+      "description": "OpenAI embedding model for document and query vectors."
+    }
+  ]
+}

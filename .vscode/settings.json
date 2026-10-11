@@ -1,0 +1,32 @@
+{
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "maven.pomPath": "backend/pom.xml",
+    "maven.executable.preferMavenWrapper": true,
+    "java.compile.nullAnalysis.mode": "disabled",
+    "eslint.workingDirectories": [
+        {
+            "directory": "frontend"
+        }
+    ],
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        "frontend/dist": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/bower_components": true,
+        "frontend/dist": true,
+        "**/*.code-search": true
+    },
+    "fileNesting.enabled": true,
+    "fileNesting.patterns": {
+        ".env*": ".env*",
+        "package.json": "package-lock.json, vite.config.*, tailwind.config.*, postcss.config.*, eslint.config.*",
+        "pom.xml": "mvnw, mvnw.cmd, .mvn"
+    }
+}

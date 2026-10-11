@@ -1,0 +1,35 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: trustlend-backend
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 4040
+      TRUSTLEND_CORS_ORIGINS: ${TRUSTLEND_CORS_ORIGINS:-http://localhost:5173,http://localhost:8080}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?SPRING_DATASOURCE_URL must be set}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?SPRING_DATASOURCE_USERNAME must be set}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?SPRING_DATASOURCE_PASSWORD must be set}
+      TRUSTLEND_JWT_SECRET: ${TRUSTLEND_JWT_SECRET:?TRUSTLEND_JWT_SECRET must be set}
+      TRUSTLEND_ADMIN_EMAIL: ${TRUSTLEND_ADMIN_EMAIL:-}
+      TRUSTLEND_ADMIN_NAME: ${TRUSTLEND_ADMIN_NAME:-TrustLend Administrator}
+      TRUSTLEND_ADMIN_PASSWORD: ${TRUSTLEND_ADMIN_PASSWORD:-}
+      TRUSTLEND_OPENAI_API_KEY: ${TRUSTLEND_OPENAI_API_KEY:-}
+      TRUSTLEND_AI_CHAT_MODEL: ${TRUSTLEND_AI_CHAT_MODEL:-gpt-4o-mini}
+      TRUSTLEND_AI_EMBEDDING_MODEL: ${TRUSTLEND_AI_EMBEDDING_MODEL:-text-embedding-3-small}
+    ports:
+      - "${BACKEND_PORT:-4040}:4040"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:4040}
+    container_name: trustlend-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"

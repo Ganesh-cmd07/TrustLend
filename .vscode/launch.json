@@ -1,0 +1,45 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach to Chrome",
+            "port": 9222,
+            "request": "attach",
+            "type": "chrome",
+            "webRoot": "${workspaceFolder}"
+        },
+        {
+            "type": "java",
+            "name": "Spring Boot - BackendApplication",
+            "request": "launch",
+            "mainClass": "app.BackendApplication",
+            "projectName": "backend",
+            "cwd": "${workspaceFolder}/backend",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Frontend - Chrome (http://localhost:5173)",
+            "url": "http://localhost:5173",
+            "webRoot": "${workspaceFolder}/frontend/src"
+        },
+        {
+            "type": "msedge",
+            "request": "launch",
+            "name": "Frontend - Edge (http://localhost:5173)",
+            "url": "http://localhost:5173",
+            "webRoot": "${workspaceFolder}/frontend/src"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Full Stack: Backend + Frontend (Chrome)",
+            "configurations": [
+                "Spring Boot - BackendApplication",
+                "Frontend - Chrome (http://localhost:5173)"
+            ],
+            "stopAll": true
+        }
+    ]
+}
