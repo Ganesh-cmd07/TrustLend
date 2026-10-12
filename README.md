@@ -1,49 +1,553 @@
-# TrustLend
+# TrustLend — Intelligent Micro-Lending & Group Loan Management System
 
-TrustLend is a Spring Boot 4 / Java 17 API with a React/Vite frontend. The backend uses MySQL for application data.
+**A technology-driven micro-lending platform designed to improve financial inclusion through explainable credit scoring, group lending, and AI-powered assistance.**
 
-## Local setup
+TrustLend is a full-stack web application designed to simplify micro-lending for borrowers and lenders, including users who may have limited formal credit histories. It combines rule-based credit assessment, loan lifecycle management, Self-Help Group (SHG) lending, wallet simulation, and an AI conversational assistant in one platform.
 
-1. Copy `.env.example` to `.env` and set the MySQL URL, username, password, and a JWT secret. The database must already exist; the app does not create a managed database for you. Keep `.env` private and do not commit it.
-2. Generate a stable JWT key once, then save it in `.env` (or a secure environment-variable store). In PowerShell, this command creates 32 random bytes encoded as Base64:
+The project is designed with a modular architecture using React, Spring Boot, and MySQL.
 
-   ```powershell
-   $bytes = [byte[]]::new(32)
-   $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-   $rng.GetBytes($bytes)
-   [Convert]::ToBase64String($bytes)
-   $rng.Dispose()
-   ```
+---
 
-   Store the result as `TRUSTLEND_JWT_SECRET`; do not regenerate it at each start, since that invalidates existing tokens.
-3. To create the first administrator, set `TRUSTLEND_ADMIN_EMAIL` and `TRUSTLEND_ADMIN_PASSWORD` in the secure runtime environment. The password must be 12–72 characters. Bootstrap is skipped when both are empty; a partial pair fails startup. It only creates a missing ADMIN user and never changes an existing account/password. Remove the bootstrap password after provisioning.
-4. For direct Aiven development, run `./scripts/start-aiven-backend.ps1` from PowerShell. It prompts for the Aiven hostname, classic MySQL port, username, and hidden password; sets the datasource URL to the existing case-sensitive `Trustlend` database with `sslMode=REQUIRED`; preserves an existing process `TRUSTLEND_JWT_SECRET` or prompts for it securely; then starts Spring Boot. Spring Boot does not load the root `.env` automatically (Docker Compose does).
-5. Run the frontend with `cd frontend; npm ci; npm run dev`. Set `VITE_API_BASE_URL` in `frontend/.env.development` to the backend URL if it differs from `http://localhost:4040`.
-6. Run `docker compose up --build` from the root after creating `.env`. The frontend is served on port 8080 and the API on port 4040 by default. Compose connects to the MySQL URL in `.env`; it does not provision a database service. Set `VITE_API_BASE_URL` if the browser should reach the API at another address.
+## Table of Contents
 
-## Account and lending workflows
+- [Project Overview](#project-overview)
+- [Key Features](#key-features)
+- [Technology Stack](#technology-stack)
+- [System Architecture](#system-architecture)
+- [User Roles](#user-roles)
+- [Project Structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Local Installation](#local-installation)
+- [Environment Configuration](#environment-configuration)
+- [Running the Application](#running-the-application)
+- [Application Workflow](#application-workflow)
+- [Deployment](#deployment)
+- [API Documentation](#api-documentation)
+- [Testing](#testing)
+- [Security Considerations](#security-considerations)
+- [Current Limitations](#current-limitations)
+- [Future Enhancements](#future-enhancements)
+- [Contributing](#contributing)
+- [License](#license)
 
-- Public signup offers Borrower and Lender applicant accounts. Lender applicants remain borrowers until an ADMIN approves the pending lender request; public signup cannot assign ADMIN.
-- An authenticated user can update their own display name at `PUT /api/v1/auth/me`. The server takes account identity from the verified JWT principal.
-- Borrowers below the documented 550 credit-score threshold cannot submit regular or group-backed loan applications. Eligible scores determine principal limits; lenders still decide whether to fund an application.
-- New loan applications follow `SUBMITTED → APPROVED/REJECTED → FUNDED → ACTIVE → REPAID`. ADMIN decisions are recorded with reviewer and timestamp in an additive review-history table; rejection requires a reason. Group-backed applications must be leader co-signed before admin approval. Legacy `PENDING` loans remain eligible for marketplace funding during migration from the earlier workflow.
-- SHG members can view recent contribution activity; only active members can contribute, and the contribution is deducted from the member's simulated wallet in the same transaction that updates group savings.
-- Borrowers can view their latest 20 credit-score snapshots at `GET /api/v1/credit-score/history`. `GET /api/v1/credit-score/me` records a snapshot when score inputs or results change; unchanged reads are deduplicated. Wallet history is server-paginated at `GET /api/v1/wallet/transactions?page=0&size=20` (page is zero-based; size is limited to 100) and always scoped to the authenticated user's wallet.
-- Wallets, deposits, withdrawals, group contributions, funding and repayments are simulated ledger entries for this project. They do not move real money or connect to a payment provider.
+---
 
-## Current limits
+## Project Overview
 
-The RAG assistant uses OpenAI `text-embedding-3-small` for document and query vectors, stores chunks and vectors in the same persistent MySQL database, ranks by cosine similarity, and grounds responses with the configured chat model (default `gpt-4o-mini`). Set `TRUSTLEND_OPENAI_API_KEY`, then authenticate as ADMIN and call `POST /api/v1/admin/ai/reindex` to index the bundled Markdown policies. `GET /api/v1/ai/status` reports configuration and indexed chunk count. Without a key or indexed corpus, chat says it is unavailable. Personal loan status is fetched only from the authenticated user's own records and is not sent to the model or shared index. Model API usage requires network access and may incur provider charges.
+Access to formal credit can be difficult for individuals and small communities with irregular incomes, limited collateral, or insufficient traditional credit histories.
 
-Credit scores use an in-process Spring cache keyed by user ID. Wallet, loan-status, and group membership/contribution writes evict cached scores. Cache contents are ephemeral and local to each backend instance; there is no distributed cache. Score history is separate from the cache and uses the additive `credit_score_history` table managed through Hibernate update mode. The scheduled overdue-installment task remains enabled at 01:00 server time. RAG indexing runs on a bounded async executor; failures are logged and indexed chunk count can be checked through the status endpoint.
+TrustLend explores a technology-based approach to micro-lending by providing:
 
-The committed `.env.example` intentionally leaves all passwords and signing/provider secrets blank. Generate a stable JWT secret and keep actual database, JWT, bootstrap-admin, and AI credentials only in a private `.env` or secure environment store. For direct Aiven startup, the PowerShell launcher prompts for the JWT secret without echoing it when it is not already present in the process environment.
+- Digital borrower and lender accounts.
+- Rule-based credit scoring and eligibility assessment.
+- Loan applications, funding, and repayment tracking.
+- Community-based lending through SHGs.
+- Simulated wallets and transaction records.
+- An AI assistant for explaining loan concepts and platform procedures.
+- Role-based access for borrowers, lenders, and administrators.
 
-See [PROJECT_AUDIT.md](PROJECT_AUDIT.md) for inspected scope and validation evidence.
-See the [API reference](docs/API.md) for the actual request paths, roles, and payloads.
+**Objective:** Build a modular and extensible micro-lending platform that demonstrates how software engineering, financial rules, and AI-assisted information retrieval can support more accessible lending workflows.
 
-## Automated checks
+> TrustLend is an educational project and prototype. Its credit scores are not official credit bureau scores, and its simulated wallet is not a bank account.
 
-Run the backend suite with `cd backend; .\mvnw.cmd test`. Run frontend component tests, production build, and lint with `cd frontend; npm test; npm run build; npm run lint`. UI component tests mock the API; they are not browser E2E tests against a running backend. Backend persistence tests use isolated H2 and do not validate Aiven connectivity.
+---
 
-Frontend tests use Vitest, jsdom, and React Testing Library. `npm test` includes formatter unit tests plus component tests for Wallet transaction pagination, admin user search/pagination, and borrower credit-score history; it does not run browser E2E against the live backend.
+## Key Features
+
+### 1. Authentication and Authorization
+
+- User registration and login.
+- Secure password hashing using BCrypt.
+- JWT-based authentication.
+- Role-based access control.
+- Protected backend endpoints.
+
+### 2. Intelligent Credit Scoring
+
+- Rule-based credit assessment.
+- Credit score and eligibility information for borrowers.
+- Score-based loan-limit calculations, subject to the implemented business rules.
+- Credit-score history, where supported by the current implementation.
+- Explainable assessment intended to help users understand the factors affecting eligibility.
+
+The score is generated by TrustLend's own rules and should not be interpreted as an official credit rating.
+
+### 3. Loan Management
+
+- Borrower loan applications.
+- Loan review and approval workflows.
+- Lender-facing loan marketplace.
+- Loan funding workflow.
+- Repayment and installment tracking.
+- Loan status management.
+
+The availability of each action depends on the user's role, loan status, and implemented business rules.
+
+### 4. Group Lending and SHGs
+
+- Self-Help Group creation and membership workflows.
+- Group contributions.
+- Group-based loan management.
+- Membership and leadership restrictions.
+
+### 5. Wallet Simulation
+
+- Simulated wallet balances.
+- Wallet transaction records.
+- Deposit and repayment workflows, where implemented.
+- Transaction history and pagination.
+
+**Important:** Wallet balances represent application data only. TrustLend does not move real money unless a genuine payment provider is separately integrated.
+
+### 6. AI-Powered Assistant
+
+TrustLend includes an AI assistant intended to help users understand:
+
+- Credit scores and eligibility.
+- Loan terms and application procedures.
+- Group lending concepts.
+- Common platform questions.
+
+The intended architecture uses retrieval-augmented generation (RAG) to retrieve relevant knowledge before generating answers. Actual provider support, document ingestion, retrieval, and grounding depend on the configured AI implementation.
+
+### 7. Administration
+
+- Administrative access to platform management features.
+- User directory and search.
+- Role-management workflows.
+- Administrative monitoring, where implemented.
+
+### 8. Performance and Maintainability
+
+- Modular backend services.
+- Database-backed persistence.
+- Pagination for supported listing endpoints.
+- Caching and asynchronous processing where implemented.
+- Automated tests and API documentation.
+
+---
+
+## Technology Stack
+
+| Layer | Technologies |
+|---|---|
+| Frontend | React, Vite, JavaScript |
+| Backend | Java, Spring Boot |
+| Security | Spring Security, JWT, BCrypt |
+| Database | MySQL |
+| ORM | Spring Data JPA, Hibernate |
+| AI integration | Spring AI and configured model provider |
+| AI provider | Google Gemini or another provider supported by the backend configuration |
+| Testing | JUnit, Spring Boot testing, frontend test tooling |
+| API testing | Postman |
+| Development tools | VS Code, Git, GitHub |
+| Backend hosting | Render |
+| Frontend hosting | Vercel |
+| Database hosting | Aiven MySQL |
+
+*The exact AI provider and test tools must match the dependencies and configuration in the current repository.*
+
+---
+
+## System Architecture
+
+```text
+                  Borrowers / Lenders / Admins
+                              |
+                              v
+                    React + Vite Frontend
+                              |
+                         REST API / JWT
+                              |
+                              v
+                    Spring Boot Backend
+                              |
+           +------------------+------------------+
+           |                  |                  |
+           v                  v                  v
+      Auth & Security    Loan Services     Credit Scoring
+           |                  |                  |
+           +------------------+------------------+
+                              |
+                 +------------+------------+
+                 |                         |
+                 v                         v
+             MySQL DB                AI Assistant
+             (Aiven)                 (Configured Provider)
+                 |
+                 v
+          Persistent Application Data
+```
+
+### Architecture Principles
+
+- **Separation of concerns:** UI, API, business logic, and persistence are separated.
+- **Security:** Protected endpoints rely on backend authentication and authorization.
+- **Persistence:** MySQL stores supported application records.
+- **Extensibility:** New lending features can be added through modular services.
+- **Deployment flexibility:** Frontend, backend, and database can be hosted separately.
+
+---
+
+## User Roles
+
+| Role | Main responsibilities |
+|---|---|
+| Borrower | Manage profile, view credit assessment, apply for loans, and track repayments |
+| Lender | Review eligible loan opportunities and participate in supported funding workflows |
+| Administrator | Manage users and perform authorized administrative actions |
+
+The backend must enforce these permissions. Hiding a frontend button alone is not a security control.
+
+---
+
+## Project Structure
+
+The repository is organized into separate frontend and backend applications. The following is a representative structure; some files may differ in your current version.
+
+```text
+TrustLend/
+├── backend/
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/app/
+│   │   │   │   ├── config/
+│   │   │   │   ├── controller/
+│   │   │   │   ├── service/
+│   │   │   │   ├── repository/
+│   │   │   │   ├── model/
+│   │   │   │   └── ...
+│   │   │   └── resources/
+│   │   │       └── application.properties
+│   │   └── test/
+│   ├── mvnw
+│   └── pom.xml
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   └── ...
+│   ├── package.json
+│   └── vite.config.js
+├── scripts/
+│   └── start-aiven-backend.ps1
+├── docs/
+│   └── API.md
+├── .env.example
+├── .gitignore
+├── docker-compose.yml
+└── README.md
+```
+
+---
+
+## Prerequisites
+
+Install the following before running TrustLend locally:
+
+- Java version compatible with `backend/pom.xml`.
+- Maven, or use the included Maven Wrapper.
+- Node.js and npm compatible with the frontend.
+- A MySQL database, such as Aiven MySQL.
+- Git.
+- Postman (optional, for API testing).
+- A Google AI Studio API key or another supported AI provider key if AI functionality is enabled.
+
+Verify your installed versions:
+
+```powershell
+java -version
+node --version
+npm --version
+git --version
+```
+
+---
+
+## Local Installation
+
+### Step 1: Clone the repository
+
+```bash
+git clone YOUR_GITHUB_REPOSITORY_URL
+cd TrustLend
+```
+
+Replace `YOUR_GITHUB_REPOSITORY_URL` with your actual repository URL.
+
+### Step 2: Configure environment variables
+
+Create a local `.env` file based on `.env.example`.
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Open `.env` and configure your database credentials, JWT secret, and AI settings.
+
+**Never commit `.env` to GitHub.**
+
+The backend may not load `.env` automatically when started directly from Java. Use the project's provided launcher or configure the variables in your terminal or IDE.
+
+### Step 3: Configure the database
+
+Create or select your MySQL database and configure the connection details.
+
+Example URL format:
+
+```text
+jdbc:mysql://YOUR_AIVEN_HOST:YOUR_AIVEN_PORT/Trustlend?sslMode=REQUIRED&serverTimezone=UTC
+```
+
+Replace the hostname and port with the actual values from Aiven. Keep database credentials private and ensure the database allows connections from your deployment environment.
+
+### Step 4: Start the backend
+
+From the repository root, use the project's Aiven launcher if it is configured for your environment:
+
+```powershell
+.\scripts\start-aiven-backend.ps1
+```
+
+Alternatively, set the required environment variables in your terminal and run the Maven Wrapper from the backend directory:
+
+```powershell
+cd backend
+.\mvnw spring-boot:run
+```
+
+The backend is configured to use port `4040` locally.
+
+### Step 5: Start the frontend
+
+Open a second terminal:
+
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
+
+Open the local Vite URL displayed in the terminal, typically:
+
+```text
+http://localhost:5173
+```
+
+Make sure the frontend's API base URL points to the running backend.
+
+---
+
+## Environment Configuration
+
+Configure only the variables that the current application actually reads.
+
+| Variable | Purpose |
+|---|---|
+| `SPRING_DATASOURCE_URL` | JDBC connection URL |
+| `SPRING_DATASOURCE_USERNAME` | Database username |
+| `SPRING_DATASOURCE_PASSWORD` | Database password |
+| `TRUSTLEND_JWT_SECRET` | Secret used for JWT signing and verification |
+| `TRUSTLEND_CORS_ORIGINS` | Permitted frontend origins |
+| `TRUSTLEND_ADMIN_EMAIL` | Optional bootstrap administrator email |
+| `TRUSTLEND_ADMIN_NAME` | Optional administrator display name |
+| `TRUSTLEND_ADMIN_PASSWORD` | Optional bootstrap administrator password |
+| `TRUSTLEND_AI_CHAT_MODEL` | Configured AI chat model |
+| `TRUSTLEND_AI_EMBEDDING_MODEL` | Configured embedding model |
+| `VITE_API_BASE_URL` | Frontend API URL, if used by the frontend |
+| `BACKEND_PORT` | Backend port setting, if consumed by the deployment configuration |
+| `FRONTEND_PORT` | Frontend port setting, if consumed by the deployment configuration |
+
+For Google AI Studio, configure the Gemini API key using the **exact environment variable name expected by the backend source code**. Do not assume that `GEMINI_API_KEY` will work unless the application reads it.
+
+For example, the following model names are commonly used with Google's APIs, but they work only when the backend has the corresponding provider integration:
+
+```dotenv
+TRUSTLEND_AI_CHAT_MODEL=gemini-2.5-flash
+TRUSTLEND_AI_EMBEDDING_MODEL=gemini-embedding-001
+```
+
+Model availability and provider support should be checked against the actual integration and current provider documentation.
+
+Generate a strong random JWT secret locally. Keep it stable across restarts and do not publish it.
+
+---
+
+## Application Workflow
+
+A typical demonstration can follow this sequence:
+
+1. **Register:** Create a borrower account.
+2. **Authenticate:** Log in and open the borrower profile.
+3. **Review credit assessment:** Inspect the displayed score and eligibility information.
+4. **Wallet simulation:** Add simulated funds using the supported deposit workflow.
+5. **Apply for a loan:** Submit a loan application.
+6. **Admin review:** Use a separately authorized administrator account to manage user roles or loan workflows.
+7. **Lender workflow:** Log in as a lender and test the supported marketplace and funding process.
+8. **Repayment:** Test installment repayment using the simulated wallet.
+9. **Group lending:** Create an SHG, join as a member, and test contributions and group-loan workflows.
+10. **AI assistant:** Ask questions about credit scoring, eligibility, loan terms, or group lending.
+
+Use separate test accounts for different roles. Follow the application's actual state transitions and API responses rather than assuming that every action is available immediately.
+
+---
+
+## Deployment
+
+TrustLend can be deployed as three separate components.
+
+### Backend — Render
+
+Configure the backend service using the repository's actual build configuration.
+
+Typical settings when deploying from the repository root:
+
+| Setting | Value |
+|---|---|
+| Root directory | Repository root |
+| Build command | `cd backend && ./mvnw package -DskipTests` |
+| Start command | `java -jar backend/target/backend-0.0.1-SNAPSHOT.jar` |
+| Port | Configure the application to honor Render's assigned port where required |
+
+Before deploying, verify the generated JAR filename and ensure the application binds to the port expected by Render. Run tests locally before building a deployment artifact.
+
+Add the required backend environment variables through Render's dashboard. Do not upload your local `.env` file.
+
+### Database — Aiven
+
+- Use the real database hostname, port, database name, username, and password.
+- Require SSL.
+- Configure access rules according to your Aiven plan.
+- Verify connectivity from the deployed backend.
+- Test record persistence after restarting the backend.
+
+Do not assume Render has one fixed outbound IP. Check the applicable Render networking details and Aiven access-control requirements.
+
+### Frontend — Vercel
+
+| Setting | Value |
+|---|---|
+| Root directory | `frontend` |
+| Build command | `npm run build` |
+| Output directory | `dist` |
+| Environment variable | `VITE_API_BASE_URL=https://YOUR-RENDER-SERVICE.onrender.com` |
+
+Replace the example URL with your deployed backend URL.
+
+Configure the backend CORS allowlist to include the exact production Vercel origin. If you use a custom domain, configure that origin as well.
+
+After deployment, test registration, login, database persistence, role permissions, loan workflows, and AI integration.
+
+---
+
+## API Documentation
+
+The project's detailed API reference is maintained in:
+
+[`docs/API.md`](docs/API.md)
+
+Use Postman or another HTTP client to test the available endpoints. Exact paths, request formats, response formats, and authorization requirements should be taken from the current API implementation and documentation.
+
+---
+
+## Testing
+
+Run backend tests from the backend directory:
+
+```powershell
+cd backend
+.\mvnw clean test
+```
+
+Build the frontend:
+
+```powershell
+cd frontend
+npm ci
+npm run build
+```
+
+Run the configured frontend tests and lint checks using the scripts defined in `frontend/package.json`.
+
+Before a release, verify:
+
+- Authentication and authorization.
+- Borrower, lender, and administrator access restrictions.
+- Credit-score calculation and history.
+- Loan lifecycle and repayment rules.
+- SHG membership and group-loan permissions.
+- Wallet balance and transaction consistency.
+- AI configuration and error handling.
+- Database connectivity and persistence.
+
+A successful automated test suite does not by itself prove that the deployed database, external AI provider, or production environment is working correctly.
+
+---
+
+## Security Considerations
+
+- Store credentials in environment variables or a secret manager.
+- Never commit `.env`, API keys, database passwords, or JWT secrets.
+- Use HTTPS in production.
+- Use a strong JWT secret and keep it stable across restarts.
+- Enforce role and ownership checks in the backend.
+- Validate user input and protect financial operations against concurrent updates.
+- Restrict administrator account creation and role changes.
+- Configure CORS for trusted frontend origins only.
+- Avoid logging passwords, access tokens, API keys, or sensitive personal information.
+- Test production database access rules before opening the application publicly.
+
+TrustLend is a prototype and should not be used to process real financial transactions or sensitive production lending decisions without additional security, compliance, privacy, and operational reviews.
+
+---
+
+## Current Limitations
+
+The following depend on the actual implementation and deployment configuration:
+
+- Wallet operations are simulated and do not represent real money transfers.
+- Credit scoring is application-defined, not an official credit bureau assessment.
+- AI chat requires valid provider configuration and network access.
+- RAG answers depend on the knowledge documents and retrieval pipeline available to the application.
+- External AI calls may incur usage charges and may be subject to provider limits.
+- Production deployment requires independent verification of database connectivity, environment variables, CORS, and role permissions.
+
+---
+
+## Future Enhancements
+
+Potential future improvements include:
+
+- Integration with a legitimate payment gateway.
+- More extensive credit-scoring validation and fairness testing.
+- Improved explainability and borrower-facing assessment details.
+- Expanded SHG analytics and contribution reports.
+- Automated reminders for due installments.
+- Better AI source attribution and knowledge-base management.
+- Database migrations and stronger production backup procedures.
+- End-to-end browser testing and deployment health monitoring.
+- Accessibility and mobile-responsive UI improvements.
+
+These are proposed enhancements, not a claim that every item is currently implemented.
+
+---
+
+## Contributing
+
+Contributions and suggestions are welcome.
+
+1. Fork the repository.
+2. Create a feature branch.
+3. Implement and test your changes.
+4. Keep credentials and private configuration out of commits.
+5. Open a pull request describing the changes and tests performed.
+
+---
+
+## License
+
+Add a `LICENSE` file before describing this project as open source. Until a license is selected, all rights remain with the applicable copyright holder.
+
+---
+
+**TrustLend — Exploring accessible, transparent, and technology-enabled micro-lending.**
