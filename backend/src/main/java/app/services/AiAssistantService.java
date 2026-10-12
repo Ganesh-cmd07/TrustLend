@@ -51,7 +51,7 @@ public class AiAssistantService {
             LoanService loanService,
             ObjectMapper mapper,
             RestTemplate http) {
-        this.apiKey = apiKey == null ? "" : apiKey.trim();
+        this.apiKey = (apiKey == null || apiKey.trim().isEmpty() || apiKey.trim().startsWith("[")) ? "" : apiKey.trim();
         this.chatModel = chatModel;
         this.embeddingModel = embeddingModel;
         this.chunkRepo = chunkRepo;
@@ -279,8 +279,8 @@ public class AiAssistantService {
 
     private boolean isPersonalStatusQuestion(String question) {
         String normalized = question.toLowerCase();
-        return normalized.matches(".*\\b(my|mine)\\b.*\\b(loan|application|repayment)\\b.*")
-                || normalized.matches(".*\\b(loan|application|repayment)\\b.*\\b(my|mine)\\b.*");
+        return normalized.matches(".*\\b(my|mine)\\b.*\\b(loans?|applications?|repayments?)\\b.*")
+                || normalized.matches(".*\\b(loans?|applications?|repayments?)\\b.*\\b(my|mine)\\b.*");
     }
 
     private String personalLoanStatus(String question, String email) {

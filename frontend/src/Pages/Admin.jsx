@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../AuthContext";
 import { apiFetch } from "../api/axios";
-import { Check, ShieldCheck, Users, UserRound, X } from "lucide-react";
+import { Bot, Check, RefreshCw, ShieldCheck, Users, UserRound, X } from "lucide-react";
 import { formatCurrency } from "../utils/formatCurrency";
 
 const ADMIN_URL = "/api/v1/admin";
@@ -21,6 +21,9 @@ function Admin() {
   const [loanApplications, setLoanApplications] = useState([]);
   const [loanReviewHistory, setLoanReviewHistory] = useState([]);
   const [loanReasons, setLoanReasons] = useState({});
+  const [aiStatus, setAiStatus] = useState({ configured: false, indexedChunks: 0, chatModel: "", embeddingModel: "" });
+  const [reindexing, setReindexing] = useState(false);
+  const [reindexMessage, setReindexMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [workingId, setWorkingId] = useState(null);
   const [error, setError] = useState("");
@@ -35,11 +38,12 @@ function Admin() {
     const userParams = new URLSearchParams({ page: String(userPage), size: "10" });
     if (activeFilter !== "ALL") userParams.set("role", activeFilter);
     if (userSearch.trim()) userParams.set("q", userSearch.trim());
-    const [usersResponse, requestsResponse, loansResponse, reviewHistoryResponse] = await Promise.all([
+    const [usersResponse, requestsResponse, loansResponse, reviewHistoryResponse, aiStatusResponse] = await Promise.all([
       apiFetch(`${ADMIN_URL}/users?${userParams}`, { headers, signal }),
       apiFetch(`${ADMIN_URL}/lender-requests`, { headers, signal }),
       apiFetch(`${ADMIN_URL}/loan-applications`, { headers, signal }),
-      apiFetch(`${ADMIN_URL}/loan-review-history`, { headers, signal })
+      apiFetch(`${ADMIN_URL}/loan-review-history`, { headers, signal }),
+      apiFetch('/api/v1/ai/status', { headers, signal }).catch(() => null)
     ]);
     const [userPageData, pendingRequests, submittedLoans, recentLoanReviews] = await Promise.all([
       parseResponse(usersResponse),
@@ -53,6 +57,16 @@ function Admin() {
     setRequests(pendingRequests);
     setLoanApplications(submittedLoans);
     setLoanReviewHistory(recentLoanReviews);
+    if (aiStatusResponse) {
+      try {
+        const aiData = await parseResponse(aiStatusResponse);
+        if (aiData && typeof aiData === "object" && !Array.isArray(aiData)) {
+          setAiStatus(aiData);
+        }
+      } catch {
+        // ignore if not configured
+      }
+    }
     setError("");
   }, [token, userPage, activeFilter, userSearch]);
 
@@ -116,6 +130,35 @@ function Admin() {
     }
   }
 
+  async function triggerReindex() {
+    setReindexing(true);
+    setReindexMessage("");
+    setError("");
+    try {
+      const response = await apiFetch(`${ADMIN_URL}/ai/reindex`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await parseResponse(response);
+      setReindexMessage(data.message || "Knowledge indexing started in the background.");
+      setTimeout(async () => {
+        try {
+          const res = await apiFetch("/api/v1/ai/status", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const updated = await parseResponse(res);
+          if (updated && typeof updated === "object") setAiStatus(updated);
+        } catch {
+          // ignore
+        }
+      }, 2000);
+    } catch (requestError) {
+      setError(requestError.message || "Failed to trigger AI knowledge re-indexing");
+    } finally {
+      setReindexing(false);
+    }
+  }
+
   const usersPerPage = 10;
   const visibleUsers = users;
 
@@ -134,6 +177,64 @@ function Admin() {
         <p className="glass-panel text-sm text-slate-400" role="status">Loading user management...</p>
       ) : (
         <>
+          <section className="glass-panel mb-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-100">
+                  <Bot size={20} className="text-emerald-400" /> AI Assistant & Knowledge Base
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Retrieval-Augmented Generation (RAG) vector index and policy knowledge base status.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="secondary-button border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 flex items-center gap-2 text-xs"
+                disabled={reindexing}
+                onClick={triggerReindex}
+              >
+                <RefreshCw size={14} className={reindexing ? "animate-spin" : ""} />
+                {reindexing ? "Re-indexing..." : "Re-index Policies"}
+              </button>
+            </div>
+
+            {reindexMessage && (
+              <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-3 text-xs text-emerald-300">
+                {reindexMessage}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5">
+                <span className="block text-xs text-slate-400">RAG Integration</span>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <span className={`inline-block h-2 w-2 rounded-full ${aiStatus.configured ? "bg-emerald-400 shadow-[0_0_8px_#34d399]" : "bg-amber-400"}`} />
+                  <span className="text-sm font-semibold text-slate-200">
+                    {aiStatus.configured ? "Provider Configured" : "Unconfigured / Fallback"}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5">
+                <span className="block text-xs text-slate-400">Indexed Chunks</span>
+                <span className="mt-1 block text-lg font-bold text-emerald-400">
+                  {aiStatus.indexedChunks ?? 0}
+                </span>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5">
+                <span className="block text-xs text-slate-400">Chat Model</span>
+                <span className="mt-1 block font-mono text-xs text-slate-300 truncate">
+                  {aiStatus.chatModel || "gemini-2.5-flash"}
+                </span>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3.5">
+                <span className="block text-xs text-slate-400">Embedding Model</span>
+                <span className="mt-1 block font-mono text-xs text-slate-300 truncate">
+                  {aiStatus.embeddingModel || "gemini-embedding-001"}
+                </span>
+              </div>
+            </div>
+          </section>
+
           <section className="glass-panel mb-6">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Loan applications</h2><p className="mt-1 text-xs text-slate-500">Approve eligible applications for lender consideration or reject with a reason.</p></div><span className="status-badge status-pending">{loanApplications.length} awaiting review</span></div>
             {loanApplications.length === 0 ? <p className="rounded-xl border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">No loan applications await review.</p> : (
