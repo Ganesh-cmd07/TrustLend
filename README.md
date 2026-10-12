@@ -6,10 +6,15 @@ TrustLend is a full-stack web application designed to simplify micro-lending for
 
 The project is designed with a modular architecture using React, Spring Boot, and MySQL.
 
+## Abstract
+
+Access to formal credit continues to be a major challenge for financially underserved communities, where conventional banking systems and rigid credit-scoring models often fail to accommodate informal income sources, limited collateral, and the absence of documented credit history. This project presents the design and implementation of an Intelligent Micro-Lending and Group Loan Management System aimed at digitizing and streamlining the microfinance process for such communities. The system is built using a React-based frontend and a Spring Boot backend with a MySQL database, following a modular client-server architecture. It supports borrower and lender registration, group-based lending modeled on the Self-Help Group (SHG) framework, and a rule-based credit-scoring engine that evaluates loan eligibility using domain-specific financial indicators. Role-based authentication and authorization, implemented using JWT and Spring Security, ensure secure and differentiated access for borrowers, lenders, and administrators. To improve accessibility, the system integrates an AI-powered conversational assistant using Retrieval-Augmented Generation (RAG), enabling users to query loan terms, eligibility criteria, and application status in natural language. The platform further incorporates caching, asynchronous processing, and containerized deployment using Docker to ensure performance and scalability. By combining structured financial logic, secure role-based workflows, and AI-assisted user support, this system demonstrates a practical, technically robust approach to expanding transparent and efficient credit access for underserved populations, while serving as a comprehensive full-stack application integrating modern web development, database design, and applied AI techniques.
+
 ---
 
 ## Table of Contents
 
+- [Abstract](#abstract)
 - [Project Overview](#project-overview)
 - [Key Features](#key-features)
 - [Technology Stack](#technology-stack)
