@@ -4,7 +4,6 @@ import app.Repo.KnowledgeChunkRepo;
 import app.Repo.UserRepo;
 import app.data.LoanResponse;
 import app.models.KnowledgeChunk;
-import app.models.User;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
