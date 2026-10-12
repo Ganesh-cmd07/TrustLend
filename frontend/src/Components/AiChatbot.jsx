@@ -5,10 +5,14 @@ import { useAuth } from "../AuthContext";
 
 const QUICK_PROMPTS = [
   "What is my credit score & limit?",
-  "Why is my credit score 500?",
   "How to improve my score to 550?",
+  "What is my wallet balance?",
+  "What is the status of my loan?",
+  "How do I apply for a loan?",
+  "How do I become a lender?",
   "What are the loan repayment terms?",
-  "How does SHG group lending work?"
+  "How does SHG group lending work?",
+  "What happens if a loan is overdue?"
 ];
 
 export default function AiChatbot() {

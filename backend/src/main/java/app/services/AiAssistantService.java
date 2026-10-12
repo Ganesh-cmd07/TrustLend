@@ -154,6 +154,9 @@ public class AiAssistantService {
             if (isCreditScoreQuestion(question) && userRepo != null && creditScoringService != null) {
                 return answer(personalCreditScoreStatus(question, authenticatedEmail), List.of("Your TrustLend account"), true);
             }
+            if (isWalletQuestion(question) && userRepo != null) {
+                return answer(personalWalletStatus(authenticatedEmail), List.of("Your TrustLend wallet"), true);
+            }
             return answer(personalLoanStatus(question, authenticatedEmail), List.of("Your TrustLend account"), true);
         }
         if (apiKey.isBlank()) {
@@ -178,10 +181,16 @@ public class AiAssistantService {
                 matches.add(new ScoredChunk(candidate, cosine(queryVector, vector)));
             }
             List<ScoredChunk> selected = matches.stream()
-                    .filter(match -> match.score() >= 0.20)
+                    .filter(match -> match.score() >= 0.05)
                     .sorted((first, second) -> Double.compare(second.score(), first.score()))
-                    .limit(4)
+                    .limit(3)
                     .toList();
+            if (selected.isEmpty() && !matches.isEmpty()) {
+                selected = matches.stream()
+                        .sorted((first, second) -> Double.compare(second.score(), first.score()))
+                        .limit(2)
+                        .toList();
+            }
             if (selected.isEmpty()) {
                 return answer("I couldn't find relevant information in the indexed TrustLend policy documents, so I can't answer that reliably.", List.of(), true);
             }
@@ -380,15 +389,38 @@ public class AiAssistantService {
 
     private boolean isPersonalStatusQuestion(String question) {
         String normalized = question.toLowerCase();
-        return normalized.matches(".*\\b(my|mine)\\b.*\\b(loans?|applications?|repayments?|scores?|credit|eligibility|limits?)\\b.*")
-                || normalized.matches(".*\\b(loans?|applications?|repayments?|scores?|credit|eligibility|limits?)\\b.*\\b(my|mine)\\b.*")
-                || normalized.matches(".*\\b(credit\\s*score|loan\\s*limit|my\\s*status|why\\s+500|why\\s+zero)\\b.*");
+        return normalized.matches(".*\\b(my|mine)\\b.*\\b(loans?|applications?|repayments?|scores?|credit|eligibility|limits?|wallet|balance|funds)\\b.*")
+                || normalized.matches(".*\\b(loans?|applications?|repayments?|scores?|credit|eligibility|limits?|wallet|balance|funds)\\b.*\\b(my|mine)\\b.*")
+                || normalized.matches(".*\\b(credit\\s*score|loan\\s*limit|my\\s*status|why\\s+500|why\\s+zero|improve\\s+score|raise\\s+score|how\\s+to\\s+reach\\s+550)\\b.*");
     }
 
     private boolean isCreditScoreQuestion(String question) {
         String normalized = question.toLowerCase();
         return normalized.contains("score") || normalized.contains("credit") || normalized.contains("eligibility")
-                || normalized.contains("limit") || normalized.contains("500") || normalized.contains("tier");
+                || normalized.contains("limit") || normalized.contains("500") || normalized.contains("tier")
+                || normalized.contains("reach 550") || normalized.contains("improve");
+    }
+
+    private boolean isWalletQuestion(String question) {
+        String normalized = question.toLowerCase();
+        return normalized.contains("wallet") || normalized.contains("balance")
+                || (normalized.contains("deposit") && normalized.contains("my"));
+    }
+
+    private String personalWalletStatus(String email) {
+        if (userRepo == null) return "Unable to access wallet service.";
+        var userOpt = userRepo.findByEmail(email);
+        if (userOpt.isEmpty()) return "Account not found for email " + email;
+        var user = userOpt.get();
+        var scoreData = creditScoringService != null ? creditScoringService.calculateCreditScore(user) : null;
+        BigDecimal bal = BigDecimal.ZERO;
+        if (scoreData != null && scoreData.get("factors") instanceof Map<?, ?> factors) {
+            bal = factors.containsKey("walletBalance") ? (BigDecimal) factors.get("walletBalance") : BigDecimal.ZERO;
+        }
+        return "Your TrustLend Wallet Status:\n"
+                + "• Current Simulated Balance: ₹" + bal + "\n"
+                + "• Credit Scoring Contribution: " + (bal.compareTo(BigDecimal.valueOf(1000)) >= 0 ? "+50 points (top tier achieved)" : (bal.compareTo(BigDecimal.valueOf(500)) >= 0 ? "+25 points (maintain ₹1,000 for +50 pts)" : "+0 points (maintain ₹500 for +25 pts or ₹1,000 for +50 pts)")) + "\n\n"
+                + "You can add simulated funds anytime by clicking 'Deposit' on the Wallet page.";
     }
 
     private String personalCreditScoreStatus(String question, String email) {
@@ -447,10 +479,16 @@ public class AiAssistantService {
             Long requestedId = Long.valueOf(idMatcher.group(1));
             loans = loans.stream().filter(loan -> loan.id().equals(requestedId)).toList();
         }
-        if (loans.isEmpty()) return "I couldn't find that loan or application in your account.";
-        return "Your loan/application status: " + loans.stream()
-                .map(loan -> "#" + loan.id() + " is " + loan.status() + " for " + loan.amount())
-                .reduce((left, right) -> left + "; " + right).orElse("");
+        if (loans.isEmpty()) return "I couldn't find any loans or applications in your account. When your credit score is 550+, you can apply from the 'Borrow' page.";
+        StringBuilder sb = new StringBuilder("Your Personal Loan History:\n");
+        for (var loan : loans) {
+            sb.append("• Loan #").append(loan.id())
+              .append(": ₹").append(loan.amount())
+              .append(" (Status: ").append(loan.status())
+              .append(", Interest: ").append(loan.interestRate()).append("%")
+              .append(", Term: ").append(loan.termMonths()).append(" months)\n");
+        }
+        return sb.toString();
     }
 
     private Map<String, Object> answer(String reply, List<String> sources, boolean configured) {
