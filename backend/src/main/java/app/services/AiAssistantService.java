@@ -26,6 +26,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -312,101 +313,166 @@ public class AiAssistantService {
         if (context == null || context.isBlank()) {
             return "I couldn't find relevant information in the indexed TrustLend policy documents.";
         }
-        String q = question.toLowerCase();
+        String q = question.toLowerCase().trim();
 
-        // 1. Credit Score Calculation, Tiers & Maximum Limits
-        if ((q.contains("score") && q.contains("tier")) || q.contains("maximum eligible loan")
-                || q.contains("loan limit") || q.contains("eligible loan amount") || q.contains("tier limit")
-                || (q.contains("credit") && (q.contains("limit") || q.contains("tier") || q.contains("amount") || q.contains("score")))) {
-            return "TrustLend Credit Scoring System & Loan Limits:\n"
-                    + "• Starting Baseline: 500 points (HIGH risk, ₹0 limit)\n"
-                    + "• Minimum Score for Loans: 550 points\n\n"
-                    + "Tier Limits by Credit Score:\n"
-                    + "  1. HIGH Risk (550 to 649 points): Up to ₹25,000 maximum loan limit\n"
-                    + "  2. MEDIUM Risk (650 to 749 points): Up to ₹50,000 maximum loan limit\n"
-                    + "  3. LOW Risk (750 to 850 points): Up to ₹1,00,000 maximum loan limit\n\n"
-                    + "Scoring Point Rules:\n"
-                    + "• Base Score: 500 points\n"
-                    + "• Wallet Balance: +25 points (₹500+ balance) or +50 points (₹1,000+ balance)\n"
-                    + "• SHG Membership: +50 points for active group membership\n"
-                    + "• Repaid Loans: +50 points per fully repaid loan\n"
-                    + "• Overdue Loans: -100 points penalty per overdue installment";
+        // 1. Can I borrow without a group? / Individual loans
+        if (q.contains("without a group") || q.contains("without shg") || q.contains("individual loan")
+                || q.contains("need a group") || q.contains("alone") || q.contains("single borrower")) {
+            return "Applying Individually vs. In a Group on TrustLend:\n"
+                    + "• Yes, you can borrow individually without being part of a group.\n"
+                    + "• Individual Loans: You apply directly from the 'Borrow' page. Once your credit score is 550+, your application is reviewed by an Administrator and made available to community lenders.\n"
+                    + "• Group Loans: Backed by a Self-Help Group (SHG) and require the group leader's co-signature before Admin review, providing enhanced peer accountability.";
         }
 
-        // 2. Applying for a loan
-        if (q.contains("apply") || q.contains("borrow money") || q.contains("how to get") || q.contains("application") || q.contains("borrow")) {
+        // 2. Can an SHG leader borrow?
+        if (q.contains("leader borrow") || q.contains("leader apply") || q.contains("leader co-sign")
+                || q.contains("leader's own loan") || q.contains("leader own loan")) {
+            return "SHG Group Leader Borrowing Rules:\n"
+                    + "• A group leader cannot co-sign their own personal group loan.\n"
+                    + "• A group leader cannot apply for their own group's loan as an ordinary member.\n"
+                    + "• However, a leader can apply for an Individual Micro-Loan (reviewed directly by Administrators), ensuring no self-approval conflicts.";
+        }
+
+        // 3. Due dates & first installment
+        if (q.contains("first installment") || (q.contains("when is") && (q.contains("due") || q.contains("first payment")))) {
+            return "TrustLend Installment Due Dates:\n"
+                    + "• The first installment is due exactly 1 month after your loan is funded by a lender.\n"
+                    + "• Subsequent installments are due monthly on the same day.\n"
+                    + "• Installments are divided equally, with any rounding remainder added to the final installment.";
+        }
+
+        // 4. Early repayment / prepayment
+        if (q.contains("early") || q.contains("prepay") || q.contains("in advance") || q.contains("pay ahead")) {
+            return "Early Installment Repayment on TrustLend:\n"
+                    + "• Yes! Borrowers can pay upcoming installments anytime ahead of their scheduled due dates.\n"
+                    + "• Simply ensure your simulated digital wallet has sufficient balance and click 'Pay installment' on your Borrower Dashboard.\n"
+                    + "• Early and timely repayments build positive credit history and protect your score from late penalties.";
+        }
+
+        // 5. Is it real money / real bank transfers?
+        if (q.contains("real money") || q.contains("real cash") || q.contains("bank account")
+                || q.contains("external bank") || q.contains("real transfer") || q.contains("real-world")) {
+            return "TrustLend Wallet System & Currency:\n"
+                    + "• TrustLend operates a closed-loop simulated digital wallet designed for microfinance inclusion and peer lending education.\n"
+                    + "• All deposits, disbursements, and repayments are simulated ledger transactions within the platform.\n"
+                    + "• Transactions do not connect to external real-world bank accounts or payment gateways.";
+        }
+
+        // 6. Interest rate range & calculation formula
+        if (q.contains("how is interest") || q.contains("interest formula") || q.contains("simple interest")
+                || q.contains("apr") || q.contains("interest rate range") || q.contains("rate range")) {
+            return "TrustLend Interest Calculation & APR:\n"
+                    + "• Simple Interest Formula: Interest = (Principal × Annual Rate × Term Months) / 1200.\n"
+                    + "• Rate Range: Applicants can propose an annual interest rate from 0% to 100% per year.\n"
+                    + "• Monthly Installments: Total Repayable = Principal + Total Interest. This total is split into equal monthly installments.";
+        }
+
+        // 7. Minimum credit score to apply
+        if (q.contains("minimum score") || q.contains("minimum credit") || q.contains("score required")
+                || q.contains("what score do i need") || q.contains("lowest score")) {
+            return "Minimum Credit Score Requirement:\n"
+                    + "• The minimum credit score to apply for a loan on TrustLend is 550 points.\n"
+                    + "• Scores below 550 (300–549) have a ₹0 loan limit (HIGH risk).\n"
+                    + "• Once your score reaches 550, you instantly unlock loan eligibility up to ₹25,000.";
+        }
+
+        // 8. Credit score tiers and maximum loan amounts
+        if ((q.contains("tier") && q.contains("score")) || q.contains("credit tiers") || q.contains("maximum eligible loan")
+                || q.contains("loan limit") || q.contains("maximum loan") || q.contains("tier limit")) {
+            return "TrustLend Credit Score Tiers & Loan Limits:\n"
+                    + "• Below 550 (300–549 points): HIGH Risk → ₹0 limit (Ineligible)\n"
+                    + "• 550 to 649 points: HIGH Risk → Eligible up to ₹25,000\n"
+                    + "• 650 to 749 points: MEDIUM Risk → Eligible up to ₹50,000\n"
+                    + "• 750 to 850 points: LOW Risk → Eligible up to ₹1,00,000\n\n"
+                    + "Points Rules: Base score is 500. Joining SHG (+50 pts), wallet balance ₹500+ (+25 pts) or ₹1,000+ (+50 pts), repaid loans (+50 pts each). Overdue loans deduct -100 pts each.";
+        }
+
+        // 9. Loan term durations
+        if (q.contains("term") && (q.contains("month") || q.contains("duration") || q.contains("how long") || q.contains("range") || q.contains("length"))) {
+            return "TrustLend Loan Terms & Durations:\n"
+                    + "• Borrowers can select loan terms between 1 month and 120 months (up to 10 years).\n"
+                    + "• Installments are billed monthly over the chosen term duration.\n"
+                    + "• The term length directly determines the monthly installment amount and total simple interest.";
+        }
+
+        // 10. How to become a lender / lender returns
+        if (q.contains("become a lender") || q.contains("be a lender") || q.contains("lender upgrade")
+                || q.contains("lender returns") || q.contains("earn interest") || q.contains("fund loans")) {
+            return "Becoming a Lender on TrustLend:\n"
+                    + "1. Click 'Become a lender' on the top navigation bar.\n"
+                    + "2. Submit your motivation and lending goals.\n"
+                    + "3. An Administrator reviews and approves the request in the Admin portal.\n"
+                    + "4. Once upgraded to LENDER, you can browse approved borrower and SHG loan requests and fund them from your wallet.\n"
+                    + "5. You earn monthly simple interest directly in your wallet as borrowers repay their installments.";
+        }
+
+        // 11. Overdue loans, defaults, late fees
+        if (q.contains("overdue") || q.contains("late payment") || q.contains("default")
+                || q.contains("missed payment") || q.contains("late fee") || q.contains("penalty")) {
+            return "What Happens if a Loan is Overdue:\n"
+                    + "• Daily Audit: TrustLend automatically checks installment due dates every day.\n"
+                    + "• Overdue Status: Unpaid installments past their due date are marked OVERDUE.\n"
+                    + "• Credit Score Penalty: Your score immediately drops by 100 points for each overdue loan.\n"
+                    + "• Application Freeze: You cannot apply for or receive new loans while having overdue installments.\n"
+                    + "• Settlement: Deposit simulated funds into your wallet and click 'Pay installment' on your Borrower Dashboard to clear the overdue status.";
+        }
+
+        // 12. Self-Help Group (SHG) mechanics
+        if (q.contains("shg") || q.contains("self-help") || q.contains("group lending")
+                || q.contains("group members") || q.contains("join group") || q.contains("create group")) {
+            return "How TrustLend Self-Help Groups (SHGs) Work:\n"
+                    + "• Group Creation: Any borrower can create a new group and becomes the leader.\n"
+                    + "• Joining a Group: Borrowers can request to join active groups; the leader reviews and approves requests.\n"
+                    + "• Credit Boost: Active membership in an SHG immediately awards +50 points to your credit score!\n"
+                    + "• Group Loans: Members can submit group-backed loans. The leader must co-sign before Admin review and lender funding.\n"
+                    + "• Leader Rule: Leaders cannot co-sign their own personal loans.";
+        }
+
+        // 13. How to apply for a loan (procedure)
+        if (q.contains("how to apply") || q.contains("how do i apply") || q.contains("application process")
+                || q.contains("steps to apply") || q.contains("how to borrow") || q.contains("apply for a loan")) {
             return "How to Apply for a Loan on TrustLend:\n"
-                    + "1. Eligibility Check: Ensure your credit score is at least 550 (scores under 550 have a ₹0 limit).\n"
+                    + "1. Check Score: Ensure your credit score is at least 550 (scores under 550 have a ₹0 limit).\n"
                     + "2. Go to 'Borrow': Click 'Borrow' on the top navigation bar.\n"
                     + "3. Choose Application Type: Select either an Individual application or an SHG Group-backed application.\n"
                     + "4. Enter Amount & Terms: Select a principal amount within your tier limit (up to ₹25,000 for 550+, ₹50,000 for 650+, ₹1,00,000 for 750+), interest rate (0%–100%), and term (1–120 months).\n"
                     + "5. Review Process: Submit the application. Group-backed loans require SHG leader co-signature first. Once approved by an Administrator, lenders can fund your loan.";
         }
 
-        // 3. Becoming a lender
-        if (q.contains("become a lender") || q.contains("be a lender") || q.contains("how to fund") || q.contains("lender upgrade") || q.contains("lender request") || q.contains("invest")) {
-            return "How to Become a Lender on TrustLend:\n"
-                    + "1. Request Role Upgrade: Click 'Become a lender' on the navigation bar.\n"
-                    + "2. Submit Motivation: Provide your intent and investment purpose, then submit the request.\n"
-                    + "3. Administrator Approval: An Administrator reviews pending lender requests in the Admin portal.\n"
-                    + "4. Dashboard Unlocked: Once approved, your role upgrades to LENDER, allowing you to browse approved borrower requests and fund them directly from your wallet.\n"
-                    + "5. Earning Returns: As borrowers repay monthly installments, principal and interest automatically credit back into your wallet.";
+        // 14. Loan rejection reasons
+        if (q.contains("reject") || q.contains("decline") || q.contains("denied")) {
+            return "Why a Loan Application May Be Rejected:\n"
+                    + "• Administrators review submitted applications for credit eligibility, completeness, and platform guidelines.\n"
+                    + "• When rejecting a loan, the Administrator is required to provide an official rejection reason.\n"
+                    + "• The rejection reason and reviewer timestamp are permanently recorded in the audit logs.";
         }
 
-        // 4. Overdue installments and late payments
-        if (q.contains("overdue") || q.contains("missed") || q.contains("late payment") || q.contains("default") || q.contains("late fee") || q.contains("penalty")) {
-            return "What Happens if a Loan Installment is Overdue:\n"
-                    + "• Daily Audit: TrustLend runs an automated background audit daily to verify due dates.\n"
-                    + "• Overdue Status: Any unpaid installment past its due date is marked OVERDUE.\n"
-                    + "• Credit Score Impact: Your credit score immediately drops by 100 points per overdue loan.\n"
-                    + "• Application Freeze: You cannot receive approval for new loans while having overdue installments.\n"
-                    + "• Settlement: Top up your simulated wallet and click 'Pay installment' on the Borrower Dashboard to clear the overdue status.";
-        }
-
-        // 5. SHG / Group Lending
-        if (q.contains("shg") || q.contains("group lending") || q.contains("self-help") || q.contains("co-sign") || q.contains("group loan") || q.contains("group member") || q.contains("leader")) {
-            return "How TrustLend Self-Help Groups (SHGs) Work:\n"
-                    + "• Group Creation: A borrower can create a group and becomes its leader.\n"
-                    + "• Membership: Borrowers can request to join active groups; the leader reviews and approves membership requests.\n"
-                    + "• Credit Score Boost: Active membership in an SHG immediately adds +50 points to your credit score.\n"
-                    + "• Group Loans: Active members can request group-backed loans. The group leader must co-sign before Administrator review and lender funding.\n"
-                    + "• Leader Rule: Group leaders cannot co-sign their own personal loans or apply as ordinary members of their own group.";
-        }
-
-        // 6. Loan Repayment Terms & Simple Interest
-        if (q.contains("repayment") || q.contains("interest") || q.contains("installment") || q.contains("terms") || q.contains("schedule") || q.contains("monthly") || q.contains("formula")) {
-            return "TrustLend Loan Repayment & Interest Terms:\n"
-                    + "• Simple Interest Formula: Interest = (Principal × Annual Rate × Term Months) / 1200.\n"
-                    + "• Equal Installments: Total repayable amount (principal + interest) is divided evenly across monthly installments.\n"
-                    + "• First Due Date: The first installment is due exactly 1 month after funding.\n"
-                    + "• Repayment Process: Borrowers pay upcoming installments directly from their simulated TrustLend wallet. Repayments credit the lender's wallet.";
-        }
-
-        // 7. User Roles and Permissions
+        // 15. User roles and permissions
         if (q.contains("role") || q.contains("permission") || q.contains("admin") || q.contains("governance")) {
             return "TrustLend User Roles & Governance:\n"
-                    + "• BORROWER: Default role. Can view credit score, join SHGs, apply for loans (when score ≥ 550), and repay installments.\n"
+                    + "• BORROWER: Default role. Can view credit score, join SHGs, apply for micro-loans (550+ score), and repay installments.\n"
                     + "• LENDER: Community investor role. Can browse approved loans from borrowers and SHGs, fund loans from wallet, and earn monthly interest.\n"
-                    + "• ADMIN: Platform governance. Reviews and approves/rejects loans (with mandatory reason), approves lender role upgrades, and governs platform operations.";
+                    + "• ADMIN: Governance role. Reviews and approves/rejects loans (with mandatory reason), approves lender role upgrades, and monitors audit logs.";
         }
 
-        // 8. Wallet and Deposits
-        if (q.contains("wallet") || q.contains("deposit") || q.contains("balance") || q.contains("top up") || q.contains("funds") || q.contains("add money")) {
+        // 16. Wallet deposit & ledger
+        if (q.contains("wallet") || q.contains("deposit") || q.contains("top up") || q.contains("add money")) {
             return "TrustLend Simulated Digital Wallet:\n"
                     + "• Deposits: Top up simulated funds anytime on the 'Wallet' page by entering an amount and clicking 'Deposit'.\n"
-                    + "• Credit Scoring Points: Maintaining a wallet balance of ₹500+ earns +25 points; maintaining ₹1,00,0+ earns +50 points toward your credit score.\n"
+                    + "• Credit Scoring Points: Maintaining a wallet balance of ₹500+ earns +25 points; maintaining ₹1,000+ earns +50 points toward your credit score.\n"
                     + "• Audit Ledger: Every deposit, loan disbursement, and installment repayment writes an immutable transaction ledger entry.";
         }
 
-        // 9. Loan Rejections
-        if (q.contains("reject") || q.contains("decline") || q.contains("denied")) {
-            return "Why a Loan Application May Be Rejected:\n"
-                    + "• Administrators review all submitted applications to verify financial criteria, score thresholds, and platform rules.\n"
-                    + "• When rejecting an application, the Administrator must provide an official rejection reason, which is permanently saved with reviewer details and timestamps in the audit logs.";
+        // 17. Income, salary slips, documentation
+        if (q.contains("income") || q.contains("salary") || q.contains("document")
+                || q.contains("payslip") || q.contains("obligation") || q.contains("proof")) {
+            return "TrustLend Underwriting & Documentation Policy:\n"
+                    + "• TrustLend uses a transparent rule-based credit scoring engine and does NOT collect income proofs, salary slips, or recurring bank obligations.\n"
+                    + "• Eligibility is determined by your platform behavior: base score (500), active SHG membership (+50 pts), simulated wallet balance (+25 to +50 pts), and timely repayment history (+50 pts per repaid loan).";
         }
 
-        // 10. Focused Excerpt Fallback
-        return "Based on TrustLend platform policy:\n\n" + extractMostRelevantExcerpt(question, context);
+        // 18. Dynamic Smart Extractor for any other question
+        return dynamicSmartExtract(question, context);
     }
 
     static double scoreChunkRelevance(String query, String content, String source, double vectorScore) {
@@ -424,23 +490,81 @@ public class AiAssistantService {
         return score;
     }
 
-    private String extractMostRelevantExcerpt(String question, String context) {
-        String[] lines = context.split("\n\n");
-        String bestLine = lines[0];
-        int maxHits = -1;
-        String[] qWords = question.toLowerCase().split("\\s+");
-        for (String line : lines) {
-            int hits = 0;
-            String lower = line.toLowerCase();
-            for (String w : qWords) {
-                if (w.length() > 3 && lower.contains(w)) hits++;
-            }
-            if (hits > maxHits) {
-                maxHits = hits;
-                bestLine = line;
+    private String dynamicSmartExtract(String question, String context) {
+        if (context == null || context.isBlank()) {
+            return "I couldn't find specific information about that in the TrustLend policy documents.";
+        }
+
+        String cleanContext = context.replaceAll("Source:\\s*[^\\n]+", "")
+                .replaceAll("(?m)^#+\\s*", "")
+                .trim();
+
+        String[] sentences = cleanContext.split("(?<=[.!?\\n])\\s+");
+        String[] qWords = question.toLowerCase().replaceAll("[^a-z0-9\\s]", " ").split("\\s+");
+        Set<String> stopWords = Set.of("what", "when", "where", "which", "who", "whom", "whose", "why", "how",
+                "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did",
+                "can", "could", "should", "would", "will", "shall", "may", "might", "must", "the", "a", "an",
+                "and", "or", "but", "if", "because", "as", "until", "while", "of", "at", "by", "for", "with",
+                "about", "against", "between", "into", "through", "during", "before", "after", "above", "below",
+                "to", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "then",
+                "once", "here", "there", "all", "any", "both", "each", "few", "more", "most", "other", "some",
+                "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "just", "now");
+
+        List<String> meaningfulQWords = new ArrayList<>();
+        for (String w : qWords) {
+            if (w.length() >= 3 && !stopWords.contains(w)) {
+                meaningfulQWords.add(w);
             }
         }
-        return bestLine.trim();
+
+        if (meaningfulQWords.isEmpty() && sentences.length > 0) {
+            return "Based on TrustLend platform policy:\n\n" + sentences[0].trim();
+        }
+
+        record ScoredSentence(String text, double score) {}
+        List<ScoredSentence> scored = new ArrayList<>();
+
+        for (String raw : sentences) {
+            String s = raw.trim();
+            if (s.length() < 15) continue;
+            String lower = s.toLowerCase();
+            double score = 0;
+            int matchedWords = 0;
+            for (String qw : meaningfulQWords) {
+                if (lower.contains(qw)) {
+                    score += 1.0;
+                    matchedWords++;
+                    if (lower.matches(".*\\b" + Pattern.quote(qw) + "\\b.*")) {
+                        score += 0.5;
+                    }
+                }
+            }
+            if (matchedWords > 0) {
+                double density = (double) matchedWords / meaningfulQWords.size();
+                score += density * 2.0;
+                scored.add(new ScoredSentence(s, score));
+            }
+        }
+
+        scored.sort((a, b) -> Double.compare(b.score(), a.score()));
+
+        if (scored.isEmpty()) {
+            return "Based on TrustLend platform policy:\n\n" + (sentences.length > 0 ? sentences[0].trim() : cleanContext);
+        }
+
+        List<String> topSentences = new ArrayList<>();
+        for (int i = 0; i < Math.min(3, scored.size()); i++) {
+            String text = scored.get(i).text();
+            if (!topSentences.contains(text)) {
+                topSentences.add(text);
+            }
+        }
+
+        StringBuilder sb = new StringBuilder("Based on TrustLend platform policy regarding your query:\n\n");
+        for (String s : topSentences) {
+            sb.append("• ").append(s).append("\n");
+        }
+        return sb.toString().trim();
     }
 
     private String generateAnswerOpenAi(String question, String context) {
@@ -560,7 +684,10 @@ public class AiAssistantService {
     private boolean isWalletQuestion(String question) {
         if (question == null) return false;
         String q = question.toLowerCase();
-        return q.contains("wallet") || (q.contains("balance") && (q.contains("my") || q.contains("account")));
+        if (q.contains("real") || q.contains("how does") || q.contains("what is") || q.contains("how do i deposit") || q.contains("how to deposit")) {
+            return false;
+        }
+        return (q.contains("my") || q.contains("account")) && (q.contains("wallet") || q.contains("balance") || q.contains("funds"));
     }
 
     private boolean isPersonalLoanStatusQuestion(String question) {
