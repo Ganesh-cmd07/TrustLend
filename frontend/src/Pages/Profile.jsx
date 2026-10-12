@@ -13,14 +13,23 @@ function Profile() {
 
   async function updateProfile(event) {
     event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setSaveError("Name cannot be empty.");
+      return;
+    }
+    if (trimmed === user.name) {
+      setMessage("Your profile name is already up to date.");
+      return;
+    }
     setSaving(true);
     setMessage("");
     setSaveError("");
     try {
-      const response = await api.put("/api/v1/auth/me", { name });
+      const response = await api.put("/api/v1/auth/me", { name: trimmed });
       setName(response.data.name);
       await refreshUser();
-      setMessage("Profile updated.");
+      setMessage("Profile updated successfully!");
     } catch (requestError) {
       setSaveError(getApiErrorMessage(requestError, "Unable to update profile"));
     } finally {
@@ -46,7 +55,7 @@ function Profile() {
           <form className="mt-6 grid max-w-xl gap-3" onSubmit={updateProfile}>
             <label className="text-xs font-semibold text-slate-300" htmlFor="profile-name">Update your name</label>
             <input className="field" id="profile-name" value={name} onChange={(event) => setName(event.target.value)} maxLength={100} required />
-            <button className="primary-button w-fit" type="submit" disabled={saving || name.trim() === user.name}>{saving ? "Saving..." : "Save profile"}</button>
+            <button className="primary-button w-fit" type="submit" disabled={saving || !name.trim()}>{saving ? "Saving..." : "Save profile"}</button>
           </form>
           {message && <p className="mt-4 text-sm text-emerald-300" role="status">{message}</p>}
           {saveError && <p className="mt-4 text-sm text-rose-300" role="alert">{saveError}</p>}
