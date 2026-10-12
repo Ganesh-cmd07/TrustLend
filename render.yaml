@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: trustlend-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: TRUSTLEND_JWT_SECRET
+        sync: false
+      - key: TRUSTLEND_CORS_ORIGINS
+        sync: false
+      - key: TRUSTLEND_ADMIN_EMAIL
+        sync: false
+      - key: TRUSTLEND_ADMIN_PASSWORD
+        sync: false
+      - key: TRUSTLEND_ADMIN_NAME
+        value: TrustLend Administrator

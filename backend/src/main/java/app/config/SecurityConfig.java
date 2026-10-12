@@ -76,6 +76,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/signup",
                                 "/api/v1/auth/login"
                         ).permitAll()
+                        .requestMatchers("/", "/health", "/api/health").permitAll()
                         .requestMatchers("/api/v1/auth/me").authenticated()
                         .requestMatchers("/api/v1/wallet/**").authenticated()
                         .requestMatchers("/api/v1/users/lender-request").hasRole("BORROWER")
