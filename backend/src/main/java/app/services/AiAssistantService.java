@@ -151,6 +151,56 @@ public class AiAssistantService {
         if (question == null || question.isBlank()) {
             return answer("Please enter a question.", List.of(), !apiKey.isBlank());
         }
+        String trimmedQ = question.trim().toLowerCase();
+        if (isGreeting(trimmedQ)) {
+            return answer(
+                    "Hello! 👋 I am your TrustLend AI Assistant.\n\n"
+                            + "I can help you with:\n"
+                            + "• Checking your credit score, risk tier, and maximum loan limit\n"
+                            + "• Learning how to improve your score to 550+ to unlock borrowing\n"
+                            + "• Applying for individual loans or joining a Self-Help Group (SHG)\n"
+                            + "• Understanding installment schedules, simple interest, and wallet balances\n\n"
+                            + "How can I assist you today?",
+                    List.of("TrustLend Assistant"),
+                    true
+            );
+        }
+        if (isGratitude(trimmedQ)) {
+            return answer(
+                    "You're very welcome! 😊 Feel free to ask anytime if you have more questions about TrustLend policies, your score, or loans.",
+                    List.of("TrustLend Assistant"),
+                    true
+            );
+        }
+        if (isCapabilityQuestion(trimmedQ)) {
+            return answer(
+                    "I am TrustLend's Financial & Policy AI Assistant! 🏦\n\n"
+                            + "Here are some questions you can ask me:\n"
+                            + "• \"What is my credit score?\"\n"
+                            + "• \"How do I improve my score to 550?\"\n"
+                            + "• \"Can I borrow without a group?\"\n"
+                            + "• \"Can an SHG leader borrow?\"\n"
+                            + "• \"When is the first installment due?\"\n"
+                            + "• \"What is the simple interest formula?\"\n"
+                            + "• \"How do I apply for a loan?\"\n"
+                            + "• \"Is the wallet real money?\"\n"
+                            + "• \"What is my wallet balance?\"",
+                    List.of("TrustLend Assistant"),
+                    true
+            );
+        }
+        if (isPlatformOverviewQuestion(trimmedQ)) {
+            return answer(
+                    "TrustLend is an inclusive community peer-to-peer microfinance platform:\n\n"
+                            + "• Peer Lending: Connects borrowers directly with community lenders.\n"
+                            + "• Transparent Credit Scoring: Base score of 500 points, with bonuses for active SHG membership (+50), simulated wallet savings (+25/+50), and repaid loans (+50 each).\n"
+                            + "• Tiered Loan Limits: 550+ unlocks up to ₹25,000; 650+ unlocks ₹50,000; 750+ unlocks up to ₹1,00,000.\n"
+                            + "• Self-Help Groups (SHGs): Community savings circles where members co-sign loans and build collective credit.\n"
+                            + "• Simulated Digital Wallet: Safe closed-loop educational financial ledger.",
+                    List.of("loan-policy.md", "group-lending.md"),
+                    true
+            );
+        }
         if (isPersonalStatusQuestion(question)) {
             if (isScoreImprovementQuestion(question) && userRepo != null && creditScoringService != null) {
                 return answer(personalScoreImprovementRoadmap(authenticatedEmail), List.of("Your TrustLend account"), true);
@@ -497,6 +547,9 @@ public class AiAssistantService {
 
         String cleanContext = context.replaceAll("Source:\\s*[^\\n]+", "")
                 .replaceAll("(?m)^#+\\s*", "")
+                .replaceAll("\\*\\*", "")
+                .replaceAll("(?m)^[-*•]\\s*", "")
+                .replaceAll("`", "")
                 .trim();
 
         String[] sentences = cleanContext.split("(?<=[.!?\\n])\\s+");
@@ -517,15 +570,24 @@ public class AiAssistantService {
             }
         }
 
-        if (meaningfulQWords.isEmpty() && sentences.length > 0) {
-            return "Based on TrustLend platform policy:\n\n" + sentences[0].trim();
+        if (meaningfulQWords.isEmpty()) {
+            return "I couldn't find specific information regarding that in the TrustLend policy documents.\n\n"
+                    + "You can ask me about:\n"
+                    + "• Your credit score, risk tier, and maximum eligible loan limits\n"
+                    + "• Individual borrowing rules and SHG leader requirements\n"
+                    + "• Installment due dates, simple interest formula, and early repayments\n"
+                    + "• Digital wallet deposits and ledger transactions";
         }
 
         record ScoredSentence(String text, double score) {}
         List<ScoredSentence> scored = new ArrayList<>();
 
         for (String raw : sentences) {
-            String s = raw.trim();
+            String s = raw.trim()
+                    .replaceAll("^[-*•]\\s*", "")
+                    .replaceAll("^\\d+\\.\\s*", "")
+                    .replaceAll("\\*\\*", "")
+                    .trim();
             if (s.length() < 15) continue;
             String lower = s.toLowerCase();
             double score = 0;
@@ -549,7 +611,12 @@ public class AiAssistantService {
         scored.sort((a, b) -> Double.compare(b.score(), a.score()));
 
         if (scored.isEmpty()) {
-            return "Based on TrustLend platform policy:\n\n" + (sentences.length > 0 ? sentences[0].trim() : cleanContext);
+            return "I couldn't find specific information regarding that in the TrustLend policy documents.\n\n"
+                    + "You can ask me about:\n"
+                    + "• Your credit score, risk tier, and maximum eligible loan limits\n"
+                    + "• Individual borrowing rules and SHG leader requirements\n"
+                    + "• Installment due dates, simple interest formula, and early repayments\n"
+                    + "• Digital wallet deposits and ledger transactions";
         }
 
         List<String> topSentences = new ArrayList<>();
@@ -647,6 +714,32 @@ public class AiAssistantService {
             rightNorm += right.get(i) * right.get(i);
         }
         return leftNorm == 0 || rightNorm == 0 ? -1 : dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
+    }
+
+    private boolean isGreeting(String q) {
+        String clean = q.replaceAll("[^a-zA-Z0-9\\s]", " ").trim().replaceAll("\\s+", " ");
+        return clean.equals("hello") || clean.equals("hi") || clean.equals("hey")
+                || clean.equals("greetings") || clean.startsWith("hello ") || clean.startsWith("hi ")
+                || clean.startsWith("hey ") || clean.equals("good morning") || clean.equals("good afternoon")
+                || clean.equals("good evening") || clean.equals("namaste") || clean.equals("how are you")
+                || clean.equals("how are you doing") || clean.equals("what's up") || clean.equals("whats up");
+    }
+
+    private boolean isGratitude(String q) {
+        String clean = q.replaceAll("[^a-zA-Z0-9\\s]", " ").trim().replaceAll("\\s+", " ");
+        return clean.equals("thank you") || clean.equals("thanks") || clean.equals("thx")
+                || clean.equals("thank you so much") || clean.startsWith("thank you ") || clean.startsWith("thanks ");
+    }
+
+    private boolean isCapabilityQuestion(String q) {
+        return q.equals("who are you") || q.equals("who are you?") || q.equals("what can you do")
+                || q.equals("what can you do?") || q.equals("help") || q.equals("help me")
+                || q.contains("your capabilities") || q.contains("what are you capable of");
+    }
+
+    private boolean isPlatformOverviewQuestion(String q) {
+        return q.contains("what is trustlend") || q.contains("about trustlend")
+                || q.contains("how does trustlend work") || q.contains("tell me about trustlend");
     }
 
     private boolean isPersonalStatusQuestion(String question) {
