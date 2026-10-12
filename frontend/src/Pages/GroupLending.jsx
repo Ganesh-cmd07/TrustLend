@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../AuthContext";
 import { apiFetch } from "../api/axios";
-import { CheckCircle2, Clock3, HandCoins, Plus, ShieldCheck, Users } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock3, Crown, HandCoins, Plus, ShieldCheck, Users, Zap } from "lucide-react";
 import { formatCurrency } from "../utils/formatCurrency";
 const GROUPS_URL = "/api/v1/groups";
 
@@ -272,6 +272,7 @@ function GroupLending() {
             const isPending = membership?.status === "PENDING";
             const isGroupLeader = group.leaderId === user?.id || membership?.role === "LEADER";
             const canRequestLoan = isMember && !isGroupLeader;
+            const pendingMembers = group.members?.filter((m) => m.status === "PENDING") || [];
             const loanForm = loanForms[group.id] || {
               amount: "",
               interestRate: "",
@@ -279,6 +280,16 @@ function GroupLending() {
             };
             return (
               <article className="glass-panel flex flex-col" key={group.id}>
+                {isGroupLeader && pendingMembers.length > 0 && (
+                  <div className="mb-4 flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300 animate-pulse">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <AlertCircle size={15} /> Action required: {pendingMembers.length} member request(s) awaiting your approval
+                    </span>
+                    <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">
+                      Leader Review
+                    </span>
+                  </div>
+                )}
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <h3 className="text-lg font-semibold">{group.name}</h3>
@@ -289,53 +300,91 @@ function GroupLending() {
                   </span>
                 </div>
                 <dl className="my-5 grid grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3"><dt className="text-xs text-slate-500">Group leader</dt><dd className="mt-1 text-sm font-semibold text-slate-200">{group.leaderName}</dd></div>
-                  <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3"><dt className="text-xs text-slate-500">Group savings</dt><dd className="mt-1 text-sm font-semibold text-emerald-300">{formatCurrency(group.totalSavings)}</dd></div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                    <dt className="text-xs text-slate-500">Group leader</dt>
+                    <dd className="mt-1 text-sm font-semibold text-slate-200 flex items-center gap-1.5">
+                      <Crown size={14} className="text-amber-400" /> {group.leaderName}
+                    </dd>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+                    <dt className="text-xs text-slate-500">Group savings</dt>
+                    <dd className="mt-1 text-sm font-semibold text-emerald-300">{formatCurrency(group.totalSavings)}</dd>
+                  </div>
                 </dl>
-                {group.contributions?.length > 0 && <div className="mb-5 rounded-xl border border-slate-800 bg-slate-950/30 p-4">
-                  <h4 className="mb-3 text-sm font-semibold">Recent contributions</h4>
-                  <ul className="grid gap-2">{group.contributions.slice(0, 5).map((contribution) => <li className="flex flex-wrap items-center justify-between gap-2 text-xs" key={contribution.id}>
-                    <span className="text-slate-300">{contribution.memberName}</span>
-                    <span className="font-semibold text-emerald-300">{formatCurrency(contribution.amount)}</span>
-                    <time className="text-slate-500" dateTime={contribution.contributedAt}>{new Date(contribution.contributedAt).toLocaleString()}</time>
-                  </li>)}</ul>
-                </div>}
-                {group.members?.length > 0 && <div className="mb-5 rounded-xl border border-slate-800 bg-slate-950/30 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-2"><h4 className="text-sm font-semibold">Member & co-signer status</h4><ShieldCheck size={16} className="text-teal-400" /></div>
-                  <ul className="grid gap-2 sm:grid-cols-2">{group.members.map((member, index) => {
-                    const memberActive = member.status === "ACTIVE";
-                    const memberPending = member.status === "PENDING";
-                    return <li className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-900/70 px-3 py-2.5" key={member.userId || index}>
-                      <span className="truncate text-xs text-slate-300">{member.name || member.userName || (member.userId === user?.id ? user?.name : null) || `Member ${index + 1}`}{member.role === "LEADER" ? " · Leader" : ""}</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`status-badge shrink-0 !px-2 !py-0.5 !text-[10px] ${memberActive ? "status-active" : memberPending ? "status-pending" : "status-neutral"}`}>{memberActive ? <CheckCircle2 size={12} /> : memberPending ? <Clock3 size={12} /> : null}{member.status}</span>
-                        {isGroupLeader && memberPending && member.membershipId && (
-                          <div className="flex gap-1">
-                            <button
-                              className="rounded border border-emerald-500/30 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 transition hover:bg-emerald-500/30"
-                              type="button"
-                              disabled={working !== ""}
-                              onClick={() => approveMember(group.id, member.membershipId)}
-                            >
-                              {working === `approve-member-${member.membershipId}` ? "..." : "Approve"}
-                            </button>
-                            <button
-                              className="rounded border border-rose-500/30 bg-rose-500/20 px-2 py-0.5 text-[10px] font-semibold text-rose-300 transition hover:bg-rose-500/30"
-                              type="button"
-                              disabled={working !== ""}
-                              onClick={() => rejectMember(group.id, member.membershipId)}
-                            >
-                              {working === `reject-member-${member.membershipId}` ? "..." : "Reject"}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </li>;
-                  })}</ul>
-                </div>}
+                {group.contributions?.length > 0 && (
+                  <div className="mb-5 rounded-xl border border-slate-800 bg-slate-950/30 p-4">
+                    <h4 className="mb-3 text-sm font-semibold">Recent contributions</h4>
+                    <ul className="grid gap-2">
+                      {group.contributions.slice(0, 5).map((contribution) => (
+                        <li className="flex flex-wrap items-center justify-between gap-2 text-xs" key={contribution.id}>
+                          <span className="text-slate-300">{contribution.memberName}</span>
+                          <span className="font-semibold text-emerald-300">{formatCurrency(contribution.amount)}</span>
+                          <time className="text-slate-500" dateTime={contribution.contributedAt}>{new Date(contribution.contributedAt).toLocaleString()}</time>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {group.members?.length > 0 && (
+                  <div className="mb-5 rounded-xl border border-slate-800 bg-slate-950/30 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <h4 className="text-sm font-semibold">Member & co-signer status</h4>
+                      <ShieldCheck size={16} className="text-teal-400" />
+                    </div>
+                    <ul className="grid gap-2 sm:grid-cols-2">
+                      {group.members.map((member, index) => {
+                        const memberActive = member.status === "ACTIVE";
+                        const memberPending = member.status === "PENDING";
+                        const mName = member.name || member.userName || (member.userId === user?.id ? user?.name : null) || `Member ${index + 1}`;
+                        const initials = mName.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "M";
+                        return (
+                          <li className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-900/70 px-3 py-2.5" key={member.userId || index}>
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 text-[10px] font-bold text-emerald-300">
+                                {initials}
+                              </span>
+                              <span className="truncate text-xs text-slate-300 flex items-center gap-1">
+                                {mName}
+                                {member.role === "LEADER" && <Crown size={12} className="text-amber-400 inline shrink-0" />}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`status-badge shrink-0 !px-2 !py-0.5 !text-[10px] ${memberActive ? "status-active" : memberPending ? "status-pending" : "status-neutral"}`}>
+                                {memberActive ? <CheckCircle2 size={12} /> : memberPending ? <Clock3 size={12} /> : null}
+                                {member.status}
+                              </span>
+                              {isGroupLeader && memberPending && member.membershipId && (
+                                <div className="flex gap-1">
+                                  <button
+                                    className="rounded border border-emerald-500/30 bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 transition hover:bg-emerald-500/30"
+                                    type="button"
+                                    disabled={working !== ""}
+                                    onClick={() => approveMember(group.id, member.membershipId)}
+                                  >
+                                    {working === `approve-member-${member.membershipId}` ? "..." : "Approve"}
+                                  </button>
+                                  <button
+                                    className="rounded border border-rose-500/30 bg-rose-500/20 px-2 py-0.5 text-[10px] font-semibold text-rose-300 transition hover:bg-rose-500/30"
+                                    type="button"
+                                    disabled={working !== ""}
+                                    onClick={() => rejectMember(group.id, member.membershipId)}
+                                  >
+                                    {working === `reject-member-${member.membershipId}` ? "..." : "Reject"}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
                 {isGroupLeader && group.loansAwaitingCosign?.length > 0 && (
                   <div className="mb-5 rounded-xl border border-amber-500/30 bg-amber-500/[0.05] p-4">
-                    <div className="mb-3 flex items-center gap-2"><h4 className="text-xs font-bold uppercase tracking-wider text-amber-400">Loans awaiting co-signature</h4></div>
+                    <div className="mb-3 flex items-center gap-2">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400">Loans awaiting co-signature</h4>
+                    </div>
                     <div className="grid gap-3">
                       {group.loansAwaitingCosign.map((loan) => (
                         <div key={loan.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/90 p-3">
@@ -357,7 +406,8 @@ function GroupLending() {
                   </div>
                 )}
                 {!membership && (
-                  <button className="primary-button mt-auto self-start"
+                  <button
+                    className="primary-button mt-auto self-start"
                     type="button"
                     disabled={working !== ""}
                     onClick={() => joinGroup(group)}
@@ -365,32 +415,54 @@ function GroupLending() {
                     {working === `join-${group.id}` ? "Sending request..." : "Request to join"}
                   </button>
                 )}
-                {isPending && <p className="mb-4 flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300"><Clock3 size={15} /> Your membership request is awaiting the group leader.</p>}
+                {isPending && (
+                  <p className="mb-4 flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300">
+                    <Clock3 size={15} /> Your membership request is awaiting the group leader.
+                  </p>
+                )}
                 {isMember && (
                   <div className="mt-auto space-y-4">
-                    <form className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/30 p-4 sm:grid-cols-[1fr_auto] sm:items-end"
+                    <form
+                      className="grid gap-3 rounded-xl border border-slate-800 bg-slate-950/30 p-4"
                       onSubmit={(event) => {
                         event.preventDefault();
                         contribute(group);
                       }}
                     >
-                      <label className="grid gap-2 text-xs font-semibold text-slate-300" htmlFor={`contribution-${group.id}`}>Contribute funds
-                      <input
-                        className="field"
-                        id={`contribution-${group.id}`}
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        required
-                        value={contributions[group.id] || ""}
-                        onChange={(event) => setContributions((current) => ({
-                          ...current,
-                          [group.id]: event.target.value
-                        }))}
-                      /></label>
-                      <button className="primary-button" type="submit" disabled={working !== ""}>
-                        {working === `contribute-${group.id}` ? "Contributing..." : "Contribute"}
-                      </button>
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-xs font-semibold text-slate-300" htmlFor={`contribution-${group.id}`}>Contribute funds</label>
+                        <div className="flex items-center gap-1">
+                          {[100, 250, 500, 1000].map((amt) => (
+                            <button
+                              key={amt}
+                              type="button"
+                              onClick={() => setContributions((curr) => ({ ...curr, [group.id]: String(amt) }))}
+                              className="rounded border border-slate-800 bg-slate-900 px-1.5 py-0.5 text-[10px] font-medium text-slate-300 hover:text-emerald-400"
+                            >
+                              +{amt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          className="field"
+                          id={`contribution-${group.id}`}
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          placeholder="e.g. 500"
+                          required
+                          value={contributions[group.id] || ""}
+                          onChange={(event) => setContributions((current) => ({
+                            ...current,
+                            [group.id]: event.target.value
+                          }))}
+                        />
+                        <button className="primary-button shrink-0" type="submit" disabled={working !== ""}>
+                          {working === `contribute-${group.id}` ? "..." : "Contribute"}
+                        </button>
+                      </div>
                     </form>
                     {canRequestLoan ? (
                       <form className="grid gap-3 rounded-xl border border-emerald-500/15 bg-emerald-500/[0.03] p-4"
