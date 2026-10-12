@@ -579,7 +579,7 @@ public class AiAssistantService {
                     + "• Digital wallet deposits and ledger transactions";
         }
 
-        List<ScoredSentence> scored = new ArrayList<>();
+        List<Map.Entry<String, Double>> scored = new ArrayList<>();
 
         for (String raw : sentences) {
             String s = raw.trim()
@@ -603,11 +603,11 @@ public class AiAssistantService {
             if (matchedWords > 0) {
                 double density = (double) matchedWords / meaningfulQWords.size();
                 score += density * 2.0;
-                scored.add(new ScoredSentence(s, score));
+                scored.add(Map.entry(s, score));
             }
         }
 
-        scored.sort((a, b) -> Double.compare(b.score(), a.score()));
+        scored.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
 
         if (scored.isEmpty()) {
             return "I couldn't find specific information regarding that in the TrustLend policy documents.\n\n"
@@ -620,7 +620,7 @@ public class AiAssistantService {
 
         List<String> topSentences = new ArrayList<>();
         for (int i = 0; i < Math.min(3, scored.size()); i++) {
-            String text = scored.get(i).text();
+            String text = scored.get(i).getKey();
             if (!topSentences.contains(text)) {
                 topSentences.add(text);
             }
@@ -956,5 +956,4 @@ public class AiAssistantService {
     }
 
     private record ScoredChunk(KnowledgeChunk chunk, double score) { }
-    private record ScoredSentence(String text, double score) { }
 }
