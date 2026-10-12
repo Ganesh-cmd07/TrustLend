@@ -24,11 +24,11 @@ public class KnowledgeChunk {
     private int chunkIndex;
 
     @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "LONGTEXT")
     private String content;
 
     @Lob
-    @Column(name = "embedding_json", nullable = false)
+    @Column(name = "embedding_json", nullable = false, columnDefinition = "LONGTEXT")
     private String embeddingJson;
 
     protected KnowledgeChunk() { }

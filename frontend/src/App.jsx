@@ -11,6 +11,7 @@ import LenderRequest from "./Pages/LenderRequest";
 import BorrowerDashboard from "./Pages/BorrowerDashboard";
 import LenderDashboard from "./Pages/LenderDashboard";
 import GroupLending from "./Pages/GroupLending";
+import AiChatbot from "./Components/AiChatbot";
 
 function AppRoutes() {
   const { isAuthenticated, loading } = useAuth();
@@ -45,6 +46,7 @@ function AppRoutes() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      {isAuthenticated && <AiChatbot />}
     </>
   );
 }

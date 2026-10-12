@@ -1,13 +1,17 @@
 package app.services;
 
 import app.Repo.KnowledgeChunkRepo;
+import app.Repo.UserRepo;
 import app.data.LoanResponse;
 import app.models.KnowledgeChunk;
+import app.models.User;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.http.HttpEntity;
@@ -16,6 +20,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -41,6 +46,8 @@ public class AiAssistantService {
     private final LoanService loanService;
     private final ObjectMapper mapper;
     private final RestTemplate http;
+    private final CreditScoringService creditScoringService;
+    private final UserRepo userRepo;
 
     public AiAssistantService(
             @Value("${app.ai.api-key:${TRUSTLEND_OPENAI_API_KEY:${GEMINI_API_KEY:${OPENAI_API_KEY:}}}}") String apiKey,
@@ -51,6 +58,21 @@ public class AiAssistantService {
             LoanService loanService,
             ObjectMapper mapper,
             RestTemplate http) {
+        this(apiKey, chatModel, embeddingModel, chunkRepo, indexStore, loanService, mapper, http, null, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public AiAssistantService(
+            @Value("${app.ai.api-key:${TRUSTLEND_OPENAI_API_KEY:${GEMINI_API_KEY:${OPENAI_API_KEY:}}}}") String apiKey,
+            @Value("${app.ai.chat-model:gpt-4o-mini}") String chatModel,
+            @Value("${app.ai.embedding-model:text-embedding-3-small}") String embeddingModel,
+            KnowledgeChunkRepo chunkRepo,
+            KnowledgeIndexStore indexStore,
+            LoanService loanService,
+            ObjectMapper mapper,
+            RestTemplate http,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) CreditScoringService creditScoringService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) UserRepo userRepo) {
         this.apiKey = (apiKey == null || apiKey.trim().isEmpty() || apiKey.trim().startsWith("[")) ? "" : apiKey.trim();
         this.chatModel = chatModel;
         this.embeddingModel = embeddingModel;
@@ -59,6 +81,21 @@ public class AiAssistantService {
         this.loanService = loanService;
         this.mapper = mapper;
         this.http = http;
+        this.creditScoringService = creditScoringService;
+        this.userRepo = userRepo;
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void autoIndexOnStartup() {
+        try {
+            if (chunkRepo.count() == 0) {
+                log.info("Knowledge chunk repository is empty on startup. Automatically indexing trusted policy documents...");
+                indexTrustedDocuments();
+                log.info("Knowledge documents automatically indexed with {} chunks.", chunkRepo.count());
+            }
+        } catch (Exception ex) {
+            log.warn("Auto-indexing on startup skipped or completed with status: {}", ex.getMessage());
+        }
     }
 
     public Map<String, Object> status() {
@@ -86,7 +123,13 @@ public class AiAssistantService {
             if (texts.isEmpty()) {
                 throw new IllegalStateException("No trusted knowledge documents were found.");
             }
-            List<List<Double>> vectors = embed(texts);
+            List<List<Double>> vectors;
+            try {
+                vectors = embed(texts);
+            } catch (Exception ex) {
+                log.warn("Remote embedding provider call failed ({}), generating local semantic vectors", ex.getMessage());
+                vectors = embedLocal(texts);
+            }
             List<KnowledgeChunk> chunks = new ArrayList<>(texts.size());
             Map<String, Integer> sourceIndexes = new HashMap<>();
             for (int i = 0; i < texts.size(); i++) {
@@ -109,13 +152,26 @@ public class AiAssistantService {
             return answer("Please enter a question.", List.of(), !apiKey.isBlank());
         }
         if (isPersonalStatusQuestion(question)) {
+            if (isCreditScoreQuestion(question) && userRepo != null && creditScoringService != null) {
+                return answer(personalCreditScoreStatus(question, authenticatedEmail), List.of("Your TrustLend account"), true);
+            }
             return answer(personalLoanStatus(question, authenticatedEmail), List.of("Your TrustLend account"), true);
         }
         if (apiKey.isBlank()) {
             return answer("The RAG assistant is not configured. Set OPENAI_API_KEY (or TRUSTLEND_OPENAI_API_KEY) and ask an administrator to index the trusted policy documents.", List.of(), false);
         }
         try {
-            List<Double> queryVector = embed(List.of(question)).get(0);
+            List<Double> queryVector;
+            try {
+                queryVector = embed(List.of(question)).get(0);
+            } catch (Exception ex) {
+                if (!isGemini() && ex instanceof org.springframework.web.client.RestClientException) {
+                    throw (org.springframework.web.client.RestClientException) ex;
+                }
+                log.warn("Remote query embedding failed ({}), using local semantic query vector", ex.getMessage());
+                queryVector = computeLocalVector(question);
+            }
+
             List<KnowledgeChunk> candidates = chunkRepo.findAllByOrderBySourceNameAscChunkIndexAsc();
             List<ScoredChunk> matches = new ArrayList<>();
             for (KnowledgeChunk candidate : candidates) {
@@ -188,11 +244,57 @@ public class AiAssistantService {
         return results;
     }
 
+    private List<List<Double>> embedLocal(List<String> inputs) {
+        List<List<Double>> results = new ArrayList<>(inputs.size());
+        for (String text : inputs) {
+            results.add(computeLocalVector(text));
+        }
+        return results;
+    }
+
+    public static List<Double> computeLocalVector(String text) {
+        final int DIM = 128;
+        double[] vec = new double[DIM];
+        if (text == null || text.isBlank()) {
+            List<Double> empty = new ArrayList<>(DIM);
+            for (int i = 0; i < DIM; i++) empty.add(0.0);
+            return empty;
+        }
+        String[] words = text.toLowerCase().replaceAll("[^a-z0-9\\s]", " ").split("\\s+");
+        for (String word : words) {
+            if (word.isBlank() || word.length() < 2) continue;
+            int hash1 = Math.abs(word.hashCode()) % DIM;
+            int hash2 = Math.abs((word + "_seed2").hashCode()) % DIM;
+            vec[hash1] += 1.0;
+            vec[hash2] += 0.5;
+        }
+        double norm = 0;
+        for (double v : vec) norm += v * v;
+        norm = Math.sqrt(norm);
+        List<Double> normalized = new ArrayList<>(DIM);
+        for (double v : vec) {
+            normalized.add(norm > 0 ? v / norm : 0.0);
+        }
+        return normalized;
+    }
+
     private String generateAnswer(String question, String context) {
         if (isGemini()) {
-            return generateAnswerGemini(question, context);
+            try {
+                return generateAnswerGemini(question, context);
+            } catch (Exception ex) {
+                log.warn("Gemini generation call failed ({}), synthesizing answer directly from policy context", ex.getMessage());
+                return synthesizePolicyAnswer(question, context);
+            }
         }
         return generateAnswerOpenAi(question, context);
+    }
+
+    private String synthesizePolicyAnswer(String question, String context) {
+        if (context == null || context.isBlank()) {
+            return "I couldn't find relevant information in the indexed TrustLend policy documents.";
+        }
+        return "Based on TrustLend platform policy documents:\n\n" + context.trim();
     }
 
     private String generateAnswerOpenAi(String question, String context) {
@@ -279,8 +381,64 @@ public class AiAssistantService {
 
     private boolean isPersonalStatusQuestion(String question) {
         String normalized = question.toLowerCase();
-        return normalized.matches(".*\\b(my|mine)\\b.*\\b(loans?|applications?|repayments?)\\b.*")
-                || normalized.matches(".*\\b(loans?|applications?|repayments?)\\b.*\\b(my|mine)\\b.*");
+        return normalized.matches(".*\\b(my|mine)\\b.*\\b(loans?|applications?|repayments?|scores?|credit|eligibility|limits?)\\b.*")
+                || normalized.matches(".*\\b(loans?|applications?|repayments?|scores?|credit|eligibility|limits?)\\b.*\\b(my|mine)\\b.*")
+                || normalized.matches(".*\\b(credit\\s*score|loan\\s*limit|my\\s*status|why\\s+500|why\\s+zero)\\b.*");
+    }
+
+    private boolean isCreditScoreQuestion(String question) {
+        String normalized = question.toLowerCase();
+        return normalized.contains("score") || normalized.contains("credit") || normalized.contains("eligibility")
+                || normalized.contains("limit") || normalized.contains("500") || normalized.contains("tier");
+    }
+
+    private String personalCreditScoreStatus(String question, String email) {
+        if (userRepo == null || creditScoringService == null) {
+            return "Unable to access credit scoring service at this time.";
+        }
+        var userOpt = userRepo.findByEmail(email);
+        if (userOpt.isEmpty()) {
+            return "I couldn't find an account matching your email (" + email + ").";
+        }
+        var user = userOpt.get();
+        var scoreData = creditScoringService.calculateCreditScore(user);
+        int score = (int) scoreData.get("creditScore");
+        String riskTier = String.valueOf(scoreData.get("riskTier"));
+        boolean eligible = Boolean.TRUE.equals(scoreData.get("eligible"));
+        BigDecimal maxLoan = (BigDecimal) scoreData.get("maxEligibleLoan");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> factors = (Map<String, Object>) scoreData.get("factors");
+        long repaidCount = factors.containsKey("repaidLoans") ? ((Number) factors.get("repaidLoans")).longValue() : 0;
+        long overdueCount = factors.containsKey("overdueLoans") ? ((Number) factors.get("overdueLoans")).longValue() : 0;
+        BigDecimal walletBal = factors.containsKey("walletBalance") ? (BigDecimal) factors.get("walletBalance") : BigDecimal.ZERO;
+        boolean inGroup = Boolean.TRUE.equals(factors.get("activeGroupMember"));
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Your Credit Profile Overview:\n");
+        sb.append("• Credit Score: ").append(score).append(" out of 850\n");
+        sb.append("• Risk Tier: ").append(riskTier).append(" risk\n");
+        sb.append("• Eligibility: ").append(eligible ? "Eligible for micro-loans" : "Below eligibility threshold (550 minimum required)").append("\n");
+        sb.append("• Maximum Eligible Loan Limit: ₹").append(maxLoan).append("\n\n");
+
+        sb.append("Contributing Factors:\n");
+        sb.append("• Base Score: 500 points\n");
+        sb.append("• Repaid Loans: ").append(repaidCount).append(" (+").append(repaidCount * 50).append(" pts)\n");
+        sb.append("• Overdue Loans: ").append(overdueCount).append(" (-").append(overdueCount * 100).append(" pts)\n");
+        sb.append("• Wallet Balance: ₹").append(walletBal).append(" (+").append(walletBal.compareTo(BigDecimal.valueOf(1000)) >= 0 ? 50 : (walletBal.compareTo(BigDecimal.valueOf(500)) >= 0 ? 25 : 0)).append(" pts)\n");
+        sb.append("• Active SHG Membership: ").append(inGroup ? "Yes (+50 pts)" : "No (+0 pts)").append("\n\n");
+
+        if (!eligible) {
+            sb.append("Why is your loan limit ₹0.00?\n");
+            sb.append("TrustLend requires a minimum credit score of 550 to qualify for loan applications.\n\n");
+            sb.append("How to improve your score:\n");
+            sb.append("1. Join an active Self-Help Group (SHG) to earn +50 points.\n");
+            sb.append("2. Maintain a simulated wallet balance of at least ₹500 (+25 pts) or ₹1,000 (+50 pts).\n");
+            sb.append("Once your score reaches 550, you unlock loan eligibility up to ₹25,000.");
+        } else {
+            sb.append("Your account is currently eligible to apply for micro-loans up to ₹").append(maxLoan).append(".");
+        }
+        return sb.toString();
     }
 
     private String personalLoanStatus(String question, String email) {

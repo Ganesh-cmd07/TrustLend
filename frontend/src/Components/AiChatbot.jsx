@@ -1,22 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bot, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import { apiFetch } from "../api/axios";
+import { useAuth } from "../AuthContext";
 
 const QUICK_PROMPTS = [
-  "What is the status of my loan?",
-  "How is credit score calculated?",
-  "How does SHG group lending work?",
-  "What are the loan eligibility limits?"
+  "What is my credit score & limit?",
+  "Why is my credit score 500?",
+  "How to improve my score to 550?",
+  "What are the loan repayment terms?",
+  "How does SHG group lending work?"
 ];
 
 export default function AiChatbot() {
+  const { token } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [messages, setMessages] = useState([
     {
       sender: 'ai',
-      text: 'Hello! I am your TrustLend AI Assistant. Ask me about micro-loan policies, SHG group lending rules, credit scoring formulas, or check your personal loan status.',
+      text: 'Hello! I am your TrustLend AI Assistant. Ask me about your credit score, loan eligibility limits, repayment terms, or SHG group lending policies.',
       sources: []
     }
   ]);
@@ -38,13 +41,14 @@ export default function AiChatbot() {
     setIsThinking(true);
 
     try {
-      const token = localStorage.getItem('trustlend_jwt')
+      const activeToken = token
+        || localStorage.getItem('trustlend_jwt')
         || sessionStorage.getItem('trustlend_jwt');
       const res = await apiFetch('/api/v1/ai/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${activeToken}`
         },
         body: JSON.stringify({ prompt: trimmed })
       });
@@ -80,6 +84,7 @@ export default function AiChatbot() {
     <>
       {!isOpen && (
         <button
+          id="ai-chatbot-toggle-btn"
           type="button"
           onClick={() => setIsOpen(true)}
           className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-gradient-to-r from-emerald-500 to-teal-600 px-5 py-3 text-sm font-semibold text-white shadow-xl shadow-emerald-950/50 transition hover:-translate-y-0.5 hover:shadow-emerald-500/20"
@@ -90,6 +95,7 @@ export default function AiChatbot() {
 
       {isOpen && (
         <section
+          id="ai-chatbot-window"
           className="fixed bottom-5 right-5 z-40 flex h-[min(620px,calc(100vh-40px))] w-[min(410px,calc(100vw-40px))] flex-col overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-950 shadow-2xl shadow-black/60"
           aria-label="TrustLend AI assistant"
         >
@@ -98,9 +104,10 @@ export default function AiChatbot() {
               <span className="grid h-8 w-8 place-items-center rounded-full bg-white/15">
                 <Bot size={17} />
               </span>
-              TrustLend RAG Assistant
+              TrustLend AI Assistant
             </span>
             <button
+              id="ai-chatbot-close-btn"
               className="grid h-8 w-8 place-items-center rounded-lg text-white/80 transition hover:bg-white/10 hover:text-white"
               type="button"
               onClick={() => setIsOpen(false)}
@@ -140,7 +147,7 @@ export default function AiChatbot() {
             {isThinking && (
               <div className="mr-auto flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-800 bg-slate-900 px-4 py-2.5 text-xs text-emerald-300">
                 <Sparkles size={14} className="animate-spin text-emerald-400" />
-                <span>Retrieving policy context...</span>
+                <span>Analyzing loan rules and account status...</span>
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -164,6 +171,7 @@ export default function AiChatbot() {
 
           <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-slate-800 bg-slate-900 p-3">
             <input
+              id="ai-chatbot-input"
               className="field min-h-10 py-2.5"
               type="text"
               value={prompt}
@@ -172,6 +180,7 @@ export default function AiChatbot() {
               disabled={isThinking}
             />
             <button
+              id="ai-chatbot-send-btn"
               className="primary-button h-10 min-h-10 w-10 shrink-0 p-0"
               type="submit"
               disabled={isThinking || !prompt.trim()}
