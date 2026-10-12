@@ -579,7 +579,6 @@ public class AiAssistantService {
                     + "• Digital wallet deposits and ledger transactions";
         }
 
-        record ScoredSentence(String text, double score) {}
         List<ScoredSentence> scored = new ArrayList<>();
 
         for (String raw : sentences) {
@@ -957,4 +956,5 @@ public class AiAssistantService {
     }
 
     private record ScoredChunk(KnowledgeChunk chunk, double score) { }
+    private record ScoredSentence(String text, double score) { }
 }
