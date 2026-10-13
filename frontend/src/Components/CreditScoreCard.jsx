@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Award, BadgeCheck, CheckCircle2, ChevronRight, Gauge, Info, ShieldAlert, TrendingUp, Users, Wallet } from "lucide-react";
+import { Award, BadgeCheck, CheckCircle2, Gauge, Info, TrendingUp, Users, Wallet } from "lucide-react";
 import { apiFetch } from "../api/axios";
 import { formatCurrency } from "../utils/formatCurrency";
 import { useAuth } from "../AuthContext";

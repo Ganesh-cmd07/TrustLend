@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../AuthContext";
 import { apiFetch } from "../api/axios";
-import { AlertCircle, CheckCircle2, Clock3, Crown, HandCoins, Plus, ShieldCheck, Users, Zap } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock3, Crown, HandCoins, Plus, ShieldCheck, Users } from "lucide-react";
 import { formatCurrency } from "../utils/formatCurrency";
 const GROUPS_URL = "/api/v1/groups";
 

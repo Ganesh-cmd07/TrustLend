@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, useMemo } from "react";
 import { useAuth } from "../AuthContext";
 import { apiFetch } from "../api/axios";
 import LoanCard from "./LoanCard";
-import { Activity, ArrowDownUp, BriefcaseBusiness, CircleDollarSign, Filter, HandCoins, Search, TrendingUp, Users, WalletCards } from "lucide-react";
+import { Activity, ArrowDownUp, BriefcaseBusiness, CircleDollarSign, Filter, HandCoins, Search, TrendingUp, WalletCards } from "lucide-react";
 import { formatCurrency } from "../utils/formatCurrency";
 import { Link } from "react-router-dom";
 
