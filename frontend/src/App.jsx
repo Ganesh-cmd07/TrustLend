@@ -29,6 +29,7 @@ function AppRoutes() {
           element={isAuthenticated ? <Navigate to="/profile" replace /> : <Login />}
         />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/register" element={<Navigate to="/signup" replace />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/profile" element={loading ? <p role="status">Loading authentication...</p> : <Profile />} />
           <Route path="/wallet" element={<Wallet />} />

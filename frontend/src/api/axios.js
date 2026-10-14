@@ -16,7 +16,14 @@ api.interceptors.request.use((config) => {
 });
 
 export function getApiErrorMessage(error, fallback) {
-  return error.response?.data?.message
+  const data = error.response?.data;
+  if (data?.details?.fields && typeof data.details.fields === "object") {
+    const fieldMessages = Object.values(data.details.fields).filter(Boolean);
+    if (fieldMessages.length > 0) {
+      return fieldMessages.join(". ");
+    }
+  }
+  return data?.message
     || (error.response
       ? `Request failed (${error.response.status})`
       : fallback);
